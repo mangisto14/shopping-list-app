@@ -11,38 +11,43 @@ export default function Register() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
+    setErrorMsg('');
     const { error } = await supabase.auth.signUp({ email, password });
-    if (!error) {
-      alert(t.success);
-      navigate('/login');
-    } else {
-      alert(error.message);
-    }
+    if (!error) navigate('/');
+    else setErrorMsg(error.message);
   };
 
   return (
-    <form onSubmit={handleRegister} className="max-w-sm mx-auto mt-12 space-y-4">
-      <h2 className="text-xl font-semibold">{t.title}</h2>
+    <form onSubmit={handleRegister} className="max-w-sm mx-auto mt-12 space-y-4 text-left">
+      <h2 className="text-xl font-semibold">{t.register || 'Register'}</h2>
+
       <input
         type="email"
         placeholder={t.email}
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="input"
+        className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
       <input
         type="password"
         placeholder={t.password}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="input"
+        className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
-      <button type="submit" className="btn">
-        {t.submit}
+
+      {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
+
+      <button
+        type="submit"
+        className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 transition"
+      >
+        {t.submit || 'Register'}
       </button>
     </form>
   );
