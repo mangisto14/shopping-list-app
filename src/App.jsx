@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
+import "./index.css";
 
 function App() {
+  const [language, setLanguage] = useState("he");
   const [items, setItems] = useState(() => {
     const saved = localStorage.getItem("shopping-list");
     return saved ? JSON.parse(saved) : [];
   });
   const [input, setInput] = useState("");
+
+  useEffect(() => {
+    // הגדרת כיוון דף לפי שפה
+    document.documentElement.dir = language === "he" ? "rtl" : "ltr";
+  }, [language]);
 
   useEffect(() => {
     localStorage.setItem("shopping-list", JSON.stringify(items));
@@ -27,32 +34,73 @@ function App() {
     setItems(items.filter((_, i) => i !== index));
   };
 
+  const labels = {
+    he: {
+      title: "🛒 רשימת קניות",
+      placeholder: "הוסף פריט...",
+      add: "הוסף",
+      delete: "מחק",
+      lang: "עברית",
+    },
+    en: {
+      title: "🛒 Shopping List",
+      placeholder: "Add item...",
+      add: "Add",
+      delete: "Delete",
+      lang: "English",
+    },
+  };
+
+  const t = labels[language];
+
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
+    <div className="min-h-screen bg-gray-100 p-4 font-sans">
       <div className="max-w-md mx-auto bg-white rounded-xl shadow p-6">
-        <h1 className="text-2xl font-bold mb-4 text-center">🛒 רשימת קניות</h1>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">{t.title}</h1>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="border rounded p-1"
+          >
+            <option value="he">עברית</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+
         <div className="flex gap-2 mb-4">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="הוסף פריט..."
+            placeholder={t.placeholder}
             className="flex-1 border p-2 rounded"
           />
           <button onClick={addItem} className="bg-blue-500 text-white px-4 py-2 rounded">
-            הוסף
+            {t.add}
           </button>
         </div>
+
         <ul className="space-y-2">
           {items.map((item, index) => (
-            <li key={index} className="flex justify-between items-center p-2 bg-gray-100 rounded">
+            <li
+              key={index}
+              className="flex justify-between items-center p-2 bg-gray-100 rounded"
+            >
               <span
                 onClick={() => toggleItem(index)}
-                className={`cursor-pointer ${item.bought ? "line-through text-gray-400" : ""}`}
+                className={`cursor-pointer ${
+                  item.bought ? "line-through text-gray-400" : ""
+                }`}
               >
                 {item.name}
               </span>
-              <button onClick={() => deleteItem(index)} className="text-red-500">🗑️</button>
+              <button
+                onClick={() => deleteItem(index)}
+                className="text-red-500"
+              >
+                🗑️
+              </button>
             </li>
           ))}
         </ul>
