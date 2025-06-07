@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { supabase } from '../supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
+import { loginLabels } from '../i18n/login';
 
 export default function Login() {
-  const { t } = useLanguage(); // שימוש בתרגומים
+  const { language } = useLanguage();
+  const t = loginLabels[language];
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
