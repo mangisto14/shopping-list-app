@@ -1,22 +1,14 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import "./index.css";
+import { useLanguage } from "./LanguageContext";
 
 function App() {
-  const [language, setLanguage] = useState("he");
+  const { language, setLanguage, t } = useLanguage();
   const [items, setItems] = useState(() => {
     const saved = localStorage.getItem("shopping-list");
     return saved ? JSON.parse(saved) : [];
   });
   const [input, setInput] = useState("");
-
-  useEffect(() => {
-    // הגדרת כיוון דף לפי שפה
-    document.documentElement.dir = language === "he" ? "rtl" : "ltr";
-  }, [language]);
-
-  useEffect(() => {
-    localStorage.setItem("shopping-list", JSON.stringify(items));
-  }, [items]);
 
   const addItem = () => {
     if (!input.trim()) return;
@@ -33,25 +25,6 @@ function App() {
   const deleteItem = (index) => {
     setItems(items.filter((_, i) => i !== index));
   };
-
-  const labels = {
-    he: {
-      title: "🛒 רשימת קניות",
-      placeholder: "הוסף פריט...",
-      add: "הוסף",
-      delete: "מחק",
-      lang: "עברית",
-    },
-    en: {
-      title: "🛒 Shopping List",
-      placeholder: "Add item...",
-      add: "Add",
-      delete: "Delete",
-      lang: "English",
-    },
-  };
-
-  const t = labels[language];
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 font-sans">
@@ -95,11 +68,8 @@ function App() {
               >
                 {item.name}
               </span>
-              <button
-                onClick={() => deleteItem(index)}
-                className="text-red-500"
-              >
-                🗑️
+              <button onClick={() => deleteItem(index)} className="text-red-500">
+                🗑️ {t.delete}
               </button>
             </li>
           ))}
