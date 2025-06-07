@@ -1,7 +1,7 @@
 // src/pages/ShoppingList.tsx
 import { useState, useEffect } from "react";
 import { useLanguage } from "../LanguageContext";
-import { shoppingListLabels } from "../i18n/shoppingList";
+import { shoppingListLabels } from "./i18n/shoppingList";
 
 export default function ShoppingList() {
   const { language } = useLanguage();
