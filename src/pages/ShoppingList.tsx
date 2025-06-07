@@ -1,11 +1,11 @@
 // src/pages/ShoppingList.tsx
 import { useState, useEffect } from "react";
 import { useLanguage } from "../LanguageContext";
-import { shoppingListLabels } from "../i18n/shoppingList";
+import { shoppingLabels } from "../i18n/shoppingList";
 
 export default function ShoppingList() {
   const { language } = useLanguage();
-  const t = shoppingListLabels[language];
+  const t = shoppingLabels[language];
 
   const [items, setItems] = useState(() => {
     const saved = localStorage.getItem("shopping-list");
