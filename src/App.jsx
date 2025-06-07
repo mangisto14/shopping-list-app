@@ -1,13 +1,17 @@
 import { useState } from "react";
 import "./index.css";
 import { useLanguage } from "./LanguageContext";
+import { appLabels } from "./i18n/app";
 
 function App() {
-  const { language, setLanguage, t } = useLanguage();
+  const { language, setLanguage } = useLanguage();
+  const t = appLabels[language];
+
   const [items, setItems] = useState(() => {
     const saved = localStorage.getItem("shopping-list");
     return saved ? JSON.parse(saved) : [];
   });
+
   const [input, setInput] = useState("");
 
   const addItem = () => {
@@ -68,7 +72,10 @@ function App() {
               >
                 {item.name}
               </span>
-              <button onClick={() => deleteItem(index)} className="text-red-500">
+              <button
+                onClick={() => deleteItem(index)}
+                className="text-red-500"
+              >
                 🗑️ {t.delete}
               </button>
             </li>
