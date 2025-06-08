@@ -104,8 +104,10 @@ export default function ShoppingList() {
       {items.length === 0 ? (
         <p className="text-center text-gray-500">{t.empty}</p>
       ) : (
-        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+        // <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        //   <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+        //       </SortableContext>
+        //     </DndContext>
             <ul className="space-y-2">
               {items.map((item) => (
                 <SortableItem
@@ -116,8 +118,6 @@ export default function ShoppingList() {
                 />
               ))}
             </ul>
-          </SortableContext>
-        </DndContext>
       )}
     </div>
   );
@@ -148,6 +148,50 @@ function SortableItem({ item, onToggle, onDelete }: any) {
       <button onClick={onDelete} className="text-red-500 ml-2">
         🗑️
       </button>
+    </li>
+  );
+}
+function SortableItem_new({ item, onToggle, onDelete, onRename }: any) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(item.name);
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const handleSave = () => {
+    onRename(item.id, name);
+    setIsEditing(false);
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="flex justify-between items-center p-2 bg-gray-100 rounded cursor-grab"
+    >
+      {isEditing ? (
+        <input
+          className="flex-1 border px-2 py-1 rounded"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={handleSave}
+          autoFocus
+        />
+      ) : (
+        <span
+          onClick={() => setIsEditing(true)}
+          className={`cursor-pointer flex-1 ${item.is_done ? 'line-through text-gray-400' : ''}`}
+        >
+          {item.name}
+        </span>
+      )}
+      <button onClick={onToggle} className="ml-2 text-green-600">✔️</button>
+      <button onClick={onDelete} className="text-red-500 ml-2">🗑️</button>
     </li>
   );
 }
