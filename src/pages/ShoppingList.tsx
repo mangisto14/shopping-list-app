@@ -15,19 +15,52 @@ export default function ShoppingList() {
   const [items, setItems] = useState<any[]>([]);
   const [input, setInput] = useState('');
 
-  useEffect(() => {
-    if (user) fetchItems();
-  }, [user]);
+const [categories, setCategories] = useState<any[]>([]);
+const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  const fetchItems = async () => {
-    const { data, error } = await supabase
-      .from('items')
-      .select('*')
-      .eq('user_id', user?.id)
-      .order('position', { ascending: true });
+useEffect(() => {
+  if (user) {
+    fetchCategories();
+    fetchItems();
+  }
+}, [user]);
 
-    if (!error && data) setItems(data);
-  };
+useEffect(() => {
+  if (user) fetchItems();
+}, [selectedCategory]);
+
+const fetchCategories = async () => {
+  const { data } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('user_id', user?.id)
+    .order('name', { ascending: true });
+  if (data) setCategories(data);
+};
+
+const fetchItems = async () => {
+  let query = supabase
+    .from('items')
+    .select('*')
+    .eq('user_id', user?.id)
+    .order('position', { ascending: true });
+
+  if (selectedCategory !== 'all') {
+    query = query.eq('category_id', selectedCategory);
+  }
+
+  const { data, error } = await query;
+
+  if (!error && data) setItems(data);
+};
+
+const renameItem = async (id: string, newName: string) => {
+  const { error } = await supabase.from('items').update({ name: newName }).eq('id', id);
+  if (!error) {
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, name: newName } : i)));
+  }
+};
+
 
   const addItem = async () => {
     if (!input.trim() || !user) return;
@@ -101,6 +134,22 @@ export default function ShoppingList() {
         </button>
       </div>
 
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
+        <label className="text-sm font-semibold text-gray-700">{t.filterByCategory}</label>
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="border border-gray-300 rounded-md px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+        >
+          <option value="all">{t.allCategories}</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {items.length === 0 ? (
         <p className="text-center text-gray-500">{t.empty}</p>
       ) : (
@@ -115,6 +164,7 @@ export default function ShoppingList() {
                   item={item}
                   onToggle={() => toggleItem(item)}
                   onDelete={() => deleteItem(item.id)}
+                  onRename={renameItem}
                 />
               ))}
             </ul>
@@ -123,7 +173,7 @@ export default function ShoppingList() {
   );
 }
 
-function SortableItem({ item, onToggle, onDelete }: any) {
+function SortableItem_old({ item, onToggle, onDelete }: any) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
 
   const style = {
@@ -151,7 +201,7 @@ function SortableItem({ item, onToggle, onDelete }: any) {
     </li>
   );
 }
-function SortableItem_new({ item, onToggle, onDelete, onRename }: any) {
+function SortableItem({ item, onToggle, onDelete, onRename }: any) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(item.name);
