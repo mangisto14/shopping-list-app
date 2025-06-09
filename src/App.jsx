@@ -8,7 +8,7 @@ import HistoryPage from './pages/History';
 
 import { useAuth } from './hooks/useAuth';
 import { useLanguage } from './LanguageContext';
-import HeaderMenu from './components/HeaderMenu';
+import HeaderMenu from './components/HeaderMenu2';
 export default function App() {
   const { language, setLanguage } = useLanguage();
   const { user, loading } = useAuth();
@@ -18,9 +18,9 @@ export default function App() {
 return (
   <BrowserRouter>
     <div className="min-h-screen flex flex-col items-center">
-      {user && <HeaderMenu />}
+      <div className="w-full max-w-md p-4 flex justify-between">
+        {user && <HeaderMenu />}
 
-      <div className="w-full max-w-md p-4">
         <div className="flex justify-end mb-4">
           <select
             value={language}
@@ -31,6 +31,9 @@ return (
             <option value="en">English</option>
           </select>
         </div>
+      </div>
+
+      <div className="w-full max-w-md p-4">
 
         <Routes>
           {user ? (
