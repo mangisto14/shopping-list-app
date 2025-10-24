@@ -1,16 +1,16 @@
 export const appLabels = {
   he: {
-    title: "🛒 רשימת קניות",
-    placeholder: "הוסף פריט...",
-    add: "הוסף",
-    delete: "מחק",
+    title: "רשימת קניות",
+    categories_title: 'קטגוריות',
+    history_title: 'היסטוריה',
     lang: "עברית",
+    logout: "התנתק",
   },
   en: {
-    title: "🛒 Shopping List",
-    placeholder: "Add item...",
-    add: "Add",
-    delete: "Delete",
+    title: "Shopping List",
+    categories_title: 'categories',
+    history_title: 'history',
     lang: "English",
+    logout: "Logout",
   },
 };
