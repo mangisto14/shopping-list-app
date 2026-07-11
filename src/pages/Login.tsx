@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { supabase } from '../supabase/client';
 import { useNavigate, Link } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
@@ -6,14 +6,14 @@ import { loginLabels } from '../i18n/login';
 
 export default function Login() {
   const { language } = useLanguage();
-  const t = loginLabels[language];
+  const t = loginLabels[language as 'he' | 'en'];
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg('');
     const { error } = await supabase.auth.signInWithPassword({ email, password });

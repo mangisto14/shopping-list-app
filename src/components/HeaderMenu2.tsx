@@ -1,5 +1,5 @@
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
-import { ArrowRightStartOnRectangleIcon, ChevronDownIcon, PhoneIcon, PlayCircleIcon } from '@heroicons/react/20/solid'
+import { ArrowRightStartOnRectangleIcon } from '@heroicons/react/20/solid'
 import {
   ShoppingCartIcon,
   RectangleGroupIcon,
@@ -18,7 +18,7 @@ export default function HeaderMenu() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useLanguage();
-  const t = appLabels[language];
+  const t = appLabels[language as 'he' | 'en'];
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

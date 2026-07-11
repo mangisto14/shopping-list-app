@@ -3,14 +3,13 @@ import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../supabase/client';
-import { DndContext, closestCenter } from '@dnd-kit/core';
-import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 
 export default function ShoppingList() {
   const { language } = useLanguage();
-  const t = shoppingLabels[language];
+  const t = shoppingLabels[language as 'he' | 'en'];
   const { user } = useAuth();
 
   const [items, setItems] = useState<any[]>([]);
@@ -95,24 +94,6 @@ const renameItem = async (id: string, newName: string) => {
     if (!error) setItems((prev) => prev.filter((i) => i.id !== id));
   };
 
-  const handleDragEnd = async (event: any) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = items.findIndex((i) => i.id === active.id);
-    const newIndex = items.findIndex((i) => i.id === over.id);
-    const newItems = arrayMove(items, oldIndex, newIndex);
-
-    setItems(newItems);
-
-    for (let i = 0; i < newItems.length; i++) {
-      if (newItems[i].position !== i) {
-        await supabase.from('items').update({ position: i }).eq('id', newItems[i].id);
-      }
-    }
-  };
-
-  
 const groupedItems = useMemo(() => {
   const groups: { [key: string]: any[] } = {};
 
@@ -160,11 +141,11 @@ const groupedItems = useMemo(() => {
         </button>
         
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-2">
-        <label className="text-sm font-semibold text-gray-700">{t.filterByCategory}</label>
+        <label className="text-sm font-semibold text-gray-700">{(t as any).filterByCategory}</label>
       </div>
 
       {items.length === 0 ? (
-        <p className="text-center text-gray-500">{t.empty}</p>
+        <p className="text-center text-gray-500">{(t as any).empty}</p>
       ) : (
 
         Object.entries(groupedItems).map(([catId, itemsInCategory]) => {
@@ -196,78 +177,6 @@ const groupedItems = useMemo(() => {
   );
 }
 
-function SortableItem_old({ item, onToggle, onDelete }: any) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className="flex justify-between items-center p-2 bg-gray-100 rounded cursor-grab"
-    >
-      <span
-        onClick={onToggle}
-        className={`cursor-pointer flex-1 ${item.is_done ? 'line-through text-gray-400' : ''}`}
-      >
-        {item.name}
-      </span>
-      <button onClick={onDelete} className="text-red-500 ml-2">
-        🗑️
-      </button>
-    </li>
-  );
-}
-function SortableItem_2({ item, onToggle, onDelete, onRename }: any) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
-  const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState(item.name);
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  const handleSave = () => {
-    onRename(item.id, name);
-    setIsEditing(false);
-  };
-
-  return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className="flex justify-between items-center p-2 bg-gray-100 rounded cursor-grab"
-    >
-      {isEditing ? (
-        <input
-          className="flex-1 border px-2 py-1 rounded"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={handleSave}
-          autoFocus
-        />
-      ) : (
-        <span
-          onClick={() => setIsEditing(true)}
-          className={`cursor-pointer flex-1 ${item.is_done ? 'line-through text-gray-400' : ''}`}
-        >
-          {item.name}
-        </span>
-      )}
-      <button onClick={onToggle} className="ml-2 text-green-600">✔️</button>
-      <button onClick={onDelete} className="text-red-500 ml-2">🗑️</button>
-    </li>
-  );
-}
 function SortableItem({ item, onToggle, onDelete, onRename }: any) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
   const [isEditing, setIsEditing] = useState(false);
