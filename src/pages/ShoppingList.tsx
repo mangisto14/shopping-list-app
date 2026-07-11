@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
 import { useAuth } from '../hooks/useAuth';
+import { useActiveList } from '../ActiveListContext';
 import { supabase } from '../supabase/client';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -11,6 +13,7 @@ export default function ShoppingList() {
   const { language } = useLanguage();
   const t = shoppingLabels[language as 'he' | 'en'];
   const { user } = useAuth();
+  const { activeListId, loading: listsLoading } = useActiveList();
 
   const [items, setItems] = useState<any[]>([]);
   const [input, setInput] = useState('');
@@ -19,17 +22,17 @@ const [categories, setCategories] = useState<any[]>([]);
 const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
 useEffect(() => {
-  if (!user) return;
+  if (!activeListId) return;
 
   fetchCategories();
   fetchItems();
-}, [user, selectedCategory]);
+}, [activeListId, selectedCategory]);
 
 const fetchCategories = async () => {
   const { data } = await supabase
     .from('categories')
     .select('*')
-    .eq('user_id', user?.id)
+    .eq('list_id', activeListId)
     .order('name', { ascending: true });
   if (data) setCategories(data);
 };
@@ -38,7 +41,7 @@ const fetchItems = async () => {
   let query = supabase
     .from('items')
     .select('*')
-    .eq('user_id', user?.id)
+    .eq('list_id', activeListId)
     .order('position', { ascending: true });
 
   if (selectedCategory !== 'all') {
@@ -59,11 +62,12 @@ const renameItem = async (id: string, newName: string) => {
 
 
   const addItem = async () => {
-    if (!input.trim() || !user) return;
+    if (!input.trim() || !user || !activeListId) return;
     const { data, error } = await supabase
       .from('items')
       .insert({
         user_id: user.id,
+        list_id: activeListId,
         name: input,
         is_done: false,
         position: items.length,
@@ -106,6 +110,16 @@ const groupedItems = useMemo(() => {
 
   return groups;
 }, [items]);
+
+  if (!listsLoading && !activeListId) {
+    return (
+      <div className="max-w-md mx-auto bg-white rounded-xl shadow p-6 mt-6 text-center text-gray-500">
+        <Link to="/lists" className="text-blue-600 hover:underline">
+          {language === 'he' ? 'צור/י רשימה כדי להתחיל' : 'Create a list to get started'}
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto bg-white rounded-xl shadow p-6 mt-6">

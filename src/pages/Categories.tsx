@@ -1,31 +1,36 @@
 // src/pages/CategoriesPage.tsx
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../supabase/client';
 import { useAuth } from '../hooks/useAuth';
+import { useActiveList } from '../ActiveListContext';
+import { useLanguage } from '../LanguageContext';
 
 export default function CategoriesPage() {
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const { activeListId, loading: listsLoading } = useActiveList();
   const [categories, setCategories] = useState<any[]>([]);
   const [input, setInput] = useState('');
 
   useEffect(() => {
-    if (user) fetchCategories();
-  }, [user]);
+    if (activeListId) fetchCategories();
+  }, [activeListId]);
 
   const fetchCategories = async () => {
     const { data } = await supabase
       .from('categories')
       .select('*')
-      .eq('user_id', user?.id)
+      .eq('list_id', activeListId)
       .order('name', { ascending: true });
     setCategories(data || []);
   };
 
   const addCategory = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || !activeListId) return;
     const { data } = await supabase
       .from('categories')
-      .insert({ name: input.trim(), user_id: user?.id })
+      .insert({ name: input.trim(), user_id: user?.id, list_id: activeListId })
       .select();
     if (data) setCategories((prev) => [...prev, ...data]);
     setInput('');
@@ -40,6 +45,16 @@ export default function CategoriesPage() {
     await supabase.from('categories').delete().eq('id', id);
     setCategories((prev) => prev.filter((c) => c.id !== id));
   };
+
+  if (!listsLoading && !activeListId) {
+    return (
+      <div className="max-w-md mx-auto p-4 text-center text-gray-500">
+        <Link to="/lists" className="text-blue-600 hover:underline">
+          {language === 'he' ? 'צור/י רשימה כדי להתחיל' : 'Create a list to get started'}
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto p-4">
