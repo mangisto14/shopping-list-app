@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # No engines field in package.json to defer to, so this
+          # resolves to whatever the current Node LTS is at run time
+          # rather than a version number pinned here that would go
+          # stale.
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript validation
+        id: typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        id: lint
+        run: npm run lint
+
+      - name: Build
+        id: build
+        run: npm run build
+
+      - name: CI summary
+        if: always()
+        run: |
+          echo "## CI Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Check | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| TypeScript | ${{ steps.typecheck.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Lint | ${{ steps.lint.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Build | ${{ steps.build.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
