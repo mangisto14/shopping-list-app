@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
-import { useAuth } from '../hooks/useAuth';
 import { useActiveList } from '../ActiveListContext';
-import { supabase } from '../supabase/client';
+import { useItems } from '../hooks/useItems';
+import { useCategories } from '../hooks/useCategories';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -12,104 +12,37 @@ import { CSS } from '@dnd-kit/utilities';
 export default function ShoppingList() {
   const { language } = useLanguage();
   const t = shoppingLabels[language as 'he' | 'en'];
-  const { user } = useAuth();
   const { activeListId, loading: listsLoading } = useActiveList();
 
-  const [items, setItems] = useState<any[]>([]);
+  const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
+  const { categories } = useCategories();
+
   const [input, setInput] = useState('');
-
-const [categories, setCategories] = useState<any[]>([]);
-const [selectedCategory, setSelectedCategory] = useState<string>('all');
-
-useEffect(() => {
-  if (!activeListId) return;
-
-  fetchCategories();
-  fetchItems();
-}, [activeListId, selectedCategory]);
-
-const fetchCategories = async () => {
-  const { data } = await supabase
-    .from('categories')
-    .select('*')
-    .eq('list_id', activeListId)
-    .order('name', { ascending: true });
-  if (data) setCategories(data);
-};
-
-const fetchItems = async () => {
-  let query = supabase
-    .from('items')
-    .select('*')
-    .eq('list_id', activeListId)
-    .order('position', { ascending: true });
-
-  if (selectedCategory !== 'all') {
-    query = query.eq('category_id', selectedCategory);
-  }
-
-  const { data, error } = await query;
-
-  if (!error && data) setItems(data);
-};
-
-const renameItem = async (id: string, newName: string) => {
-  const { error } = await supabase.from('items').update({ name: newName }).eq('id', id);
-  if (!error) {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, name: newName } : i)));
-  }
-};
-
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const addItem = async () => {
-    if (!input.trim() || !user || !activeListId) return;
-    const { data, error } = await supabase
-      .from('items')
-      .insert({
-        user_id: user.id,
-        list_id: activeListId,
-        name: input,
-        is_done: false,
-        position: items.length,
-        category_id: selectedCategory || null,
-      })
-      .select();
-
-    if (!error && data) setItems((prev) => [...prev, ...data]);
+    if (!input.trim()) return;
+    await addItemToList(input, selectedCategory || null);
     setInput('');
   };
 
-  const toggleItem = async (item: any) => {
-    const { data, error } = await supabase
-      .from('items')
-      .update({ is_done: !item.is_done })
-      .eq('id', item.id)
-      .select();
-
-    if (!error && data) {
-      setItems((prev) =>
-        prev.map((i) => (i.id === item.id ? { ...i, is_done: !i.is_done } : i))
-      );
-    }
-  };
-
-  const deleteItem = async (id: string) => {
-    const { error } = await supabase.from('items').delete().eq('id', id);
-    if (!error) setItems((prev) => prev.filter((i) => i.id !== id));
-  };
+const visibleItems = useMemo(
+  () => (selectedCategory === 'all' ? items : items.filter((i) => i.category_id === selectedCategory)),
+  [items, selectedCategory]
+);
 
 const groupedItems = useMemo(() => {
   const groups: { [key: string]: any[] } = {};
 
   // יצירת קבוצות לפי category_id
-  items.forEach((item) => {
+  visibleItems.forEach((item) => {
     const catId = item.category_id || 'uncategorized';
     if (!groups[catId]) groups[catId] = [];
     groups[catId].push(item);
   });
 
   return groups;
-}, [items]);
+}, [visibleItems]);
 
   if (!listsLoading && !activeListId) {
     return (
@@ -158,7 +91,7 @@ const groupedItems = useMemo(() => {
         <label className="text-sm font-semibold text-gray-700">{(t as any).filterByCategory}</label>
       </div>
 
-      {items.length === 0 ? (
+      {visibleItems.length === 0 ? (
         <p className="text-center text-gray-500">{(t as any).empty}</p>
       ) : (
 

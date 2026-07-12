@@ -1,49 +1,20 @@
 // src/pages/CategoriesPage.tsx
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../supabase/client';
-import { useAuth } from '../hooks/useAuth';
 import { useActiveList } from '../ActiveListContext';
+import { useCategories } from '../hooks/useCategories';
 import { useLanguage } from '../LanguageContext';
 
 export default function CategoriesPage() {
-  const { user } = useAuth();
   const { language } = useLanguage();
   const { activeListId, loading: listsLoading } = useActiveList();
-  const [categories, setCategories] = useState<any[]>([]);
+  const { categories, addCategory: addCategoryToList, updateCategory, deleteCategory } = useCategories();
   const [input, setInput] = useState('');
 
-  useEffect(() => {
-    if (activeListId) fetchCategories();
-  }, [activeListId]);
-
-  const fetchCategories = async () => {
-    const { data } = await supabase
-      .from('categories')
-      .select('*')
-      .eq('list_id', activeListId)
-      .order('name', { ascending: true });
-    setCategories(data || []);
-  };
-
   const addCategory = async () => {
-    if (!input.trim() || !activeListId) return;
-    const { data } = await supabase
-      .from('categories')
-      .insert({ name: input.trim(), user_id: user?.id, list_id: activeListId })
-      .select();
-    if (data) setCategories((prev) => [...prev, ...data]);
+    if (!input.trim()) return;
+    await addCategoryToList(input);
     setInput('');
-  };
-
-  const updateCategory = async (id: string, newName: string) => {
-    const { error } = await supabase.from('categories').update({ name: newName }).eq('id', id);
-    if (!error) fetchCategories();
-  };
-
-  const deleteCategory = async (id: string) => {
-    await supabase.from('categories').delete().eq('id', id);
-    setCategories((prev) => prev.filter((c) => c.id !== id));
   };
 
   if (!listsLoading && !activeListId) {
