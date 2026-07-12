@@ -1,0 +1,70 @@
+name: Supabase Migrations
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/migrations/**"
+
+# Avoid two migration runs applying concurrently if pushes to main land
+# close together - queue behind the in-flight run rather than cancel it,
+# since cancelling mid-`db push` could leave the database in a
+# half-migrated state.
+concurrency:
+  group: supabase-migrations
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Apply Supabase migrations
+    runs-on: ubuntu-latest
+    # Belt-and-suspenders: the push/branches trigger above already
+    # restricts this to main, but this explicit guard is a second,
+    # independent safety net against ever running on a pull_request
+    # event or any branch other than main if the trigger config above
+    # is ever loosened by mistake.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: List detected migration files
+        run: |
+          echo "Migration files changed in this push:"
+          git diff --name-only "${{ github.event.before }}" "${{ github.event.after }}" -- supabase/migrations/ \
+            || echo "(no previous commit to diff against - listing all current migration files instead)"
+          ls -1 supabase/migrations/
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate migration files
+        run: supabase migration list --project-ref "$SUPABASE_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+      - name: Link Supabase project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Apply migrations
+        run: supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Migration success
+        if: success()
+        run: echo "Supabase migrations applied successfully."
