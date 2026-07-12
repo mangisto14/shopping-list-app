@@ -1,0 +1,4 @@
+project_id = "shopping-list-app"
+
+[db]
+major_version = 15

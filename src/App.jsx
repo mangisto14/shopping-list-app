@@ -5,15 +5,27 @@ import Register from './pages/Register';
 import ShoppingList from './pages/ShoppingList';
 import CategoriesPage from './pages/Categories';
 import HistoryPage from './pages/History';
+import ListsPage from './pages/Lists';
 
 import { useAuth } from './hooks/useAuth';
 import { useLanguage } from './LanguageContext';
+import { ActiveListProvider } from './ActiveListContext';
 import HeaderMenu from './components/HeaderMenu2';
 export default function App() {
   const { language, setLanguage } = useLanguage();
   const { user, loading } = useAuth();
 
   if (loading) return <div className="text-center mt-10">טוען...</div>;
+
+const authenticatedRoutes = (
+  <Routes>
+    <Route path="/" element={<ShoppingList />} />
+    <Route path="/categories" element={<CategoriesPage />} />
+    <Route path="/lists" element={<ListsPage />} />
+    <Route path="/history" element={<HistoryPage />} />
+    <Route path="*" element={<Navigate to="/" />} />
+  </Routes>
+);
 
 return (
   <BrowserRouter>
@@ -34,23 +46,15 @@ return (
       </div>
 
       <div className="w-full max-w-md p-4">
-
-        <Routes>
-          {user ? (
-            <>
-              <Route path="/" element={<ShoppingList />} />
-              <Route path="/categories" element={<CategoriesPage />} />
-              <Route path="/history" element={<HistoryPage />} />
-              <Route path="*" element={<Navigate to="/" />} />
-            </>
-          ) : (
-            <>
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="*" element={<Navigate to="/login" />} />
-            </>
-          )}
-        </Routes>
+        {user ? (
+          <ActiveListProvider>{authenticatedRoutes}</ActiveListProvider>
+        ) : (
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="*" element={<Navigate to="/login" />} />
+          </Routes>
+        )}
       </div>
     </div>
   </BrowserRouter>

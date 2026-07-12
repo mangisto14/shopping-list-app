@@ -1,5 +1,5 @@
 // src/pages/Register.tsx
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { supabase } from '../supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
@@ -7,14 +7,14 @@ import { registerLabels } from '../i18n/register';
 
 export default function Register() {
   const { language } = useLanguage();
-  const t = registerLabels[language];
+  const t = registerLabels[language as 'he' | 'en'];
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const navigate = useNavigate();
 
-  const handleRegister = async (e) => {
+  const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg('');
     const { error } = await supabase.auth.signUp({ email, password });
@@ -24,7 +24,7 @@ export default function Register() {
 
   return (
     <form onSubmit={handleRegister} className="max-w-sm mx-auto mt-12 space-y-4 text-left">
-      <h2 className="text-xl font-semibold">{t.register || 'Register'}</h2>
+      <h2 className="text-xl font-semibold">{(t as any).register || 'Register'}</h2>
 
       <input
         type="email"

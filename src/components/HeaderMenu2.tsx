@@ -1,15 +1,17 @@
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
-import { ArrowRightStartOnRectangleIcon, ChevronDownIcon, PhoneIcon, PlayCircleIcon } from '@heroicons/react/20/solid'
+import { ArrowRightStartOnRectangleIcon } from '@heroicons/react/20/solid'
 import {
   ShoppingCartIcon,
   RectangleGroupIcon,
   ArchiveBoxIcon,
   Bars2Icon,
+  QueueListIcon,
 } from '@heroicons/react/24/outline'
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../LanguageContext';
 import { appLabels } from '../i18n/app';
+import { listsLabels } from '../i18n/lists';
 import { supabase } from '../supabase/client';
 
 export default function HeaderMenu() {
@@ -18,7 +20,8 @@ export default function HeaderMenu() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useLanguage();
-  const t = appLabels[language];
+  const t = appLabels[language as 'he' | 'en'];
+  const tLists = listsLabels[language as 'he' | 'en'];
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -30,6 +33,7 @@ export default function HeaderMenu() {
 ]
   const solutions = [
   { name: t.title, href: '/', icon: ShoppingCartIcon },
+  { name: tLists.title, href: '/lists', icon: QueueListIcon },
   { name: t.categories_title, href: '/categories', icon: RectangleGroupIcon },
   { name: t.history_title, href: '/history', icon: ArchiveBoxIcon },
 

@@ -1,45 +1,31 @@
 // src/pages/CategoriesPage.tsx
-import { useEffect, useState } from 'react';
-import { supabase } from '../supabase/client';
-import { useAuth } from '../hooks/useAuth';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useActiveList } from '../ActiveListContext';
+import { useCategories } from '../hooks/useCategories';
+import { useLanguage } from '../LanguageContext';
 
 export default function CategoriesPage() {
-  const { user } = useAuth();
-  const [categories, setCategories] = useState<any[]>([]);
+  const { language } = useLanguage();
+  const { activeListId, loading: listsLoading } = useActiveList();
+  const { categories, addCategory: addCategoryToList, updateCategory, deleteCategory } = useCategories();
   const [input, setInput] = useState('');
-
-  useEffect(() => {
-    if (user) fetchCategories();
-  }, [user]);
-
-  const fetchCategories = async () => {
-    const { data } = await supabase
-      .from('categories')
-      .select('*')
-      .eq('user_id', user?.id)
-      .order('name', { ascending: true });
-    setCategories(data || []);
-  };
 
   const addCategory = async () => {
     if (!input.trim()) return;
-    const { data } = await supabase
-      .from('categories')
-      .insert({ name: input.trim(), user_id: user?.id })
-      .select();
-    if (data) setCategories((prev) => [...prev, ...data]);
+    await addCategoryToList(input);
     setInput('');
   };
 
-  const updateCategory = async (id: string, newName: string) => {
-    const { error } = await supabase.from('categories').update({ name: newName }).eq('id', id);
-    if (!error) fetchCategories();
-  };
-
-  const deleteCategory = async (id: string) => {
-    await supabase.from('categories').delete().eq('id', id);
-    setCategories((prev) => prev.filter((c) => c.id !== id));
-  };
+  if (!listsLoading && !activeListId) {
+    return (
+      <div className="max-w-md mx-auto p-4 text-center text-gray-500">
+        <Link to="/lists" className="text-blue-600 hover:underline">
+          {language === 'he' ? 'צור/י רשימה כדי להתחיל' : 'Create a list to get started'}
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto p-4">
