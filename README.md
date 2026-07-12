@@ -13,6 +13,21 @@ https://www.youtube.com/watch?v=Zk2YJUvfsOA
 - TailwindCSS: https://tailwindcss.com/
 - How to Learn TailwindCSS?: https://www.youtube.com/shorts/BhasK2BPn8c
 
+## CI Pipeline
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) validates every change before it lands.
+
+**When it runs**: on every pull request, and on every push to `main`. No secrets are required - the checks below don't need any credentials to run.
+
+**What it validates**:
+- **TypeScript** (`npx tsc --noEmit`) - the project compiles under `tsconfig.json`'s strict settings, with no type errors.
+- **Lint** (`npm run lint`) - ESLint rules pass with zero warnings allowed (`--max-warnings 0`).
+- **Build** (`npm run build`) - the production Vite build completes successfully, the same command Vercel runs on deploy.
+
+**How failures are handled**: any failing step stops the pipeline immediately and marks the run as failed - nothing is skipped or ignored. A results table (TypeScript / Lint / Build, each showing success, failure, or skipped) is always written to the workflow run's summary, even when an earlier step failed and later ones didn't run, so it's clear at a glance which check needs attention.
+
+> **Known pre-existing issue**: as of this writing, the Lint step fails on a `react/prop-types` violation in `src/LanguageContext.jsx` that predates this pipeline. Enabling this workflow will surface it as a red check rather than fix it - see the project's audit history for details. Fixing it is an application-code change, outside the scope of adding CI infrastructure.
+
 ## Database Migrations
 
 This project's database schema lives in `supabase/migrations/` as SQL files, managed with the [Supabase CLI](https://supabase.com/docs/guides/cli).
