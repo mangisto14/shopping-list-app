@@ -1,4 +1,7 @@
 // src/components/shopping/ShoppingHeader.tsx
+import type { Member } from './MemberAvatar';
+import MemberAvatarGroup from './MemberAvatarGroup';
+
 interface ShoppingHeaderProps {
   title: string;
   subtitle: string;
@@ -6,14 +9,8 @@ interface ShoppingHeaderProps {
   completedItems: number;
   itemsLabel: string;
   completedLabel: string;
+  members: Member[];
 }
-
-// TODO: replace with real household members, sourced from list_members
-// (plus display name/avatar once a profiles table exists) once
-// realtime presence for collaborators is implemented. Same limitation
-// already flagged on the Lists page's member panel - mock data only,
-// not wired to any query.
-const MOCK_MEMBERS = ['👨', '👩', '👧'];
 
 export default function ShoppingHeader({
   title,
@@ -22,6 +19,7 @@ export default function ShoppingHeader({
   completedItems,
   itemsLabel,
   completedLabel,
+  members,
 }: ShoppingHeaderProps) {
   return (
     <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl shadow-md p-5">
@@ -38,15 +36,11 @@ export default function ShoppingHeader({
           </span>
         </div>
 
-        <div className="flex gap-1">
-          {MOCK_MEMBERS.map((avatar, i) => (
-            <span
-              key={i}
-              className="w-8 h-8 rounded-full bg-white/30 flex items-center justify-center text-base"
-            >
-              {avatar}
-            </span>
-          ))}
+        <div className="flex items-center gap-2">
+          <MemberAvatarGroup members={members} />
+          <span className="text-xs text-white/80 font-medium">
+            {members.length} {members.length === 1 ? 'חבר/ה פעיל/ה' : 'חברים פעילים'}
+          </span>
         </div>
       </div>
     </div>

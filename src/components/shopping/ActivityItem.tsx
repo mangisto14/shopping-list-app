@@ -1,4 +1,6 @@
 // src/components/shopping/ActivityItem.tsx
+import MemberAvatar from './MemberAvatar';
+
 export type ActivityType = 'added' | 'completed' | 'deleted';
 
 export interface ActivityEvent {
@@ -46,9 +48,13 @@ export default function ActivityItem({ event }: ActivityItemProps) {
 
   return (
     <li className="flex items-start gap-3 px-4 py-2.5 transition-all hover:bg-gray-50">
-      <span className="flex-shrink-0 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-lg">
-        {event.userAvatar}
-      </span>
+      {/* No online status here: ActivityEvent describes a past action,
+          not a member's current presence - MemberAvatar's indicator is
+          intentionally omitted (online left undefined) rather than
+          guessed. */}
+      <div className="flex-shrink-0">
+        <MemberAvatar name={event.userName} avatar={event.userAvatar} size="sm" />
+      </div>
 
       <div className="flex-1 min-w-0">
         <p className="text-sm text-gray-800 leading-snug">

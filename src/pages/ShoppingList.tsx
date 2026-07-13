@@ -8,6 +8,7 @@ import { useCategories } from '../hooks/useCategories';
 import ShoppingHeader from '../components/shopping/ShoppingHeader';
 import ProgressBar from '../components/shopping/ProgressBar';
 import ActivityFeed from '../components/shopping/ActivityFeed';
+import MembersPanel, { mockMembers } from '../components/shopping/MembersPanel';
 import CategorySection, { getCategoryStyle } from '../components/shopping/CategorySection';
 import FloatingAddButton from '../components/shopping/FloatingAddButton';
 
@@ -75,11 +76,14 @@ export default function ShoppingList() {
         completedItems={completedItems}
         itemsLabel={t.itemsCount}
         completedLabel={t.completedCount}
+        members={mockMembers}
       />
 
       <ProgressBar totalItems={totalItems} completedItems={completedItems} label={t.progressLabel} />
 
       <ActivityFeed />
+
+      <MembersPanel />
 
       {categories.length > 0 && (
         <div>
