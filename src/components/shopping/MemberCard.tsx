@@ -1,6 +1,7 @@
 // src/components/shopping/MemberCard.tsx
 import type { Member } from './MemberAvatar';
 import MemberAvatar from './MemberAvatar';
+import PresenceBadge from '../presence/PresenceBadge';
 
 interface MemberCardProps {
   member: Member;
@@ -21,12 +22,9 @@ export default function MemberCard({ member, isOwner }: MemberCardProps) {
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-800 truncate">{member.name}</p>
-        <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-          <span className={member.online ? 'text-emerald-500' : 'text-gray-300'}>
-            {member.online ? '●' : '○'}
-          </span>
-          {member.online ? 'מחובר/ת' : 'לא מחובר/ת'}
-        </p>
+        <div className="mt-1">
+          <PresenceBadge online={member.online} />
+        </div>
       </div>
 
       {/* TODO (Future): real role badge once role data exists on

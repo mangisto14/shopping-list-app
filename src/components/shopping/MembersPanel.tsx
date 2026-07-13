@@ -1,23 +1,20 @@
 // src/components/shopping/MembersPanel.tsx
 import { useState } from 'react';
-import type { Member } from './MemberAvatar';
 import MemberCard from './MemberCard';
 import InviteMemberButton from './InviteMemberButton';
+import { mockPresence } from '../presence/PresencePanel';
 
 // TODO (Future): load members from the list_members table (already
 // used by useLists.ts / Lists.tsx) joined with a profiles table for
 // display name/avatar - list_members currently only stores user_id,
 // the same gap already flagged on the Lists page's member panel.
-// TODO (Future): realtime online presence - e.g. Supabase Presence on
-// a per-list channel - replacing the static `online` boolean below.
+// Realtime presence now has its own mock-backed components (see
+// src/components/presence/) - mockPresence there is the canonical
+// member/presence array, replacing what used to be a separate
+// mockMembers export here.
 // Invite UI now exists (InviteMemberButton -> InviteMemberModal), but
 // it's mock-only - see InviteMemberModal's own TODOs for connecting it
 // to list_members and a real accept-invite flow.
-export const mockMembers: Member[] = [
-  { id: '1', name: 'יוסף', avatar: '👨', online: true },
-  { id: '2', name: 'שרה', avatar: '👩', online: true },
-  { id: '3', name: 'נועה', avatar: '👧', online: false },
-];
 
 interface MembersPanelProps {
   onInvite: () => void;
@@ -25,7 +22,7 @@ interface MembersPanelProps {
 
 export default function MembersPanel({ onInvite }: MembersPanelProps) {
   const [expanded, setExpanded] = useState(true);
-  const onlineCount = mockMembers.filter((m) => m.online).length;
+  const onlineCount = mockPresence.filter((m) => m.online).length;
 
   return (
     <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -47,7 +44,7 @@ export default function MembersPanel({ onInvite }: MembersPanelProps) {
         <div className="px-3 pb-3 space-y-3">
           <InviteMemberButton onClick={onInvite} variant="ghost" />
           <div className="space-y-2">
-            {mockMembers.map((member, i) => (
+            {mockPresence.map((member, i) => (
               <MemberCard key={member.id} member={member} isOwner={i === 0} />
             ))}
           </div>

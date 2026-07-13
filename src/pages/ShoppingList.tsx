@@ -8,7 +8,7 @@ import { useCategories } from '../hooks/useCategories';
 import ShoppingHeader from '../components/shopping/ShoppingHeader';
 import ProgressBar from '../components/shopping/ProgressBar';
 import ActivityFeed from '../components/shopping/ActivityFeed';
-import MembersPanel, { mockMembers } from '../components/shopping/MembersPanel';
+import MembersPanel from '../components/shopping/MembersPanel';
 import InviteMemberModal from '../components/shopping/InviteMemberModal';
 import CategorySection, { getCategoryStyle } from '../components/shopping/CategorySection';
 import FloatingAddButton from '../components/shopping/FloatingAddButton';
@@ -16,6 +16,8 @@ import ListSwitcher from '../components/lists/ListSwitcher';
 import CreateListModal from '../components/lists/CreateListModal';
 import EmptyListsState from '../components/lists/EmptyListsState';
 import type { ListInfo } from '../components/lists/ListCard';
+import LiveStatusBanner from '../components/presence/LiveStatusBanner';
+import PresencePanel, { mockPresence } from '../components/presence/PresencePanel';
 
 // Deterministic fallback emoji per list, since the real `lists` table
 // has no emoji column (adding one is a schema change, out of scope
@@ -119,6 +121,8 @@ export default function ShoppingList() {
         onCreateNew={() => setShowCreateListModal(true)}
       />
 
+      <LiveStatusBanner users={mockPresence} />
+
       <ShoppingHeader
         title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
         subtitle={t.subtitle}
@@ -126,13 +130,15 @@ export default function ShoppingList() {
         completedItems={completedItems}
         itemsLabel={t.itemsCount}
         completedLabel={t.completedCount}
-        members={mockMembers}
+        members={mockPresence}
         onInvite={() => setShowInviteModal(true)}
       />
 
       <ProgressBar totalItems={totalItems} completedItems={completedItems} label={t.progressLabel} />
 
       <ActivityFeed />
+
+      <PresencePanel />
 
       <MembersPanel onInvite={() => setShowInviteModal(true)} />
 

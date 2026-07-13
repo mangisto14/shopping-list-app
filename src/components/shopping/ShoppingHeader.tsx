@@ -2,6 +2,7 @@
 import type { Member } from './MemberAvatar';
 import MemberAvatarGroup from './MemberAvatarGroup';
 import InviteMemberButton from './InviteMemberButton';
+import PresenceIndicator from '../presence/PresenceIndicator';
 
 interface ShoppingHeaderProps {
   title: string;
@@ -24,6 +25,8 @@ export default function ShoppingHeader({
   members,
   onInvite,
 }: ShoppingHeaderProps) {
+  const onlineCount = members.filter((m) => m.online).length;
+
   return (
     <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl shadow-md p-5">
       <h1 className="text-xl font-bold">{title}</h1>
@@ -41,8 +44,9 @@ export default function ShoppingHeader({
 
         <div className="flex items-center gap-2 flex-wrap">
           <MemberAvatarGroup members={members} />
-          <span className="text-xs text-white/80 font-medium">
-            {members.length} {members.length === 1 ? 'חבר/ה פעיל/ה' : 'חברים פעילים'}
+          <span className="text-xs text-white/80 font-medium flex items-center gap-1">
+            <PresenceIndicator online={onlineCount > 0} />
+            {onlineCount} מחוברים
           </span>
           <InviteMemberButton onClick={onInvite} variant="solid" />
         </div>
