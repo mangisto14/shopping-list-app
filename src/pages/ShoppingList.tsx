@@ -18,6 +18,8 @@ import EmptyListsState from '../components/lists/EmptyListsState';
 import type { ListInfo } from '../components/lists/ListCard';
 import LiveStatusBanner from '../components/presence/LiveStatusBanner';
 import PresencePanel, { mockPresence } from '../components/presence/PresencePanel';
+import LiveActivityBanner from '../components/live/LiveActivityBanner';
+import LiveEditingPanel from '../components/live/LiveEditingPanel';
 
 // Deterministic fallback emoji per list, since the real `lists` table
 // has no emoji column (adding one is a schema change, out of scope
@@ -123,6 +125,8 @@ export default function ShoppingList() {
 
       <LiveStatusBanner users={mockPresence} />
 
+      <LiveActivityBanner />
+
       <ShoppingHeader
         title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
         subtitle={t.subtitle}
@@ -137,6 +141,8 @@ export default function ShoppingList() {
       <ProgressBar totalItems={totalItems} completedItems={completedItems} label={t.progressLabel} />
 
       <ActivityFeed />
+
+      <LiveEditingPanel />
 
       <PresencePanel />
 
