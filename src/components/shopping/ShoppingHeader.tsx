@@ -28,29 +28,29 @@ export default function ShoppingHeader({
   const onlineCount = members.filter((m) => m.online).length;
 
   return (
-    <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl shadow-md p-5">
-      <h1 className="text-xl font-bold">{title}</h1>
-      <p className="text-sm text-white/80 mt-0.5">{subtitle}</p>
+    <div className="bg-white rounded-2xl shadow-sm p-4">
+      <div className="flex items-center justify-between gap-3">
+        <MemberAvatarGroup members={members} />
+        <h1 className="text-lg font-bold text-gray-800 truncate">{title}</h1>
+      </div>
 
-      <div className="flex items-center justify-between mt-4 gap-2 flex-wrap">
-        <div className="flex gap-2">
-          <span className="bg-white/20 backdrop-blur rounded-full px-3 py-1 text-sm font-medium">
-            {totalItems} {itemsLabel}
-          </span>
-          <span className="bg-white/20 backdrop-blur rounded-full px-3 py-1 text-sm font-medium">
-            {completedItems} {completedLabel}
-          </span>
-        </div>
+      <div className="flex items-center justify-between mt-3 gap-2 flex-wrap">
+        <span className="text-sm text-gray-500">
+          <span className="font-semibold text-gray-700">{totalItems}</span> {itemsLabel}
+          {'  •  '}
+          <span className="font-semibold text-gray-700">{completedItems}</span> {completedLabel}
+        </span>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <MemberAvatarGroup members={members} />
-          <span className="text-xs text-white/80 font-medium flex items-center gap-1">
+          <span className="text-xs text-violet-600 font-medium flex items-center gap-1 bg-violet-50 rounded-full px-2.5 py-1">
             <PresenceIndicator online={onlineCount > 0} />
             {onlineCount} מחוברים
           </span>
-          <InviteMemberButton onClick={onInvite} variant="solid" />
+          <InviteMemberButton onClick={onInvite} variant="ghost" />
         </div>
       </div>
+
+      <p className="text-xs text-gray-400 mt-1.5">{subtitle}</p>
     </div>
   );
 }

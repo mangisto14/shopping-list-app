@@ -12,6 +12,7 @@ import MembersPanel from '../components/shopping/MembersPanel';
 import InviteMemberModal from '../components/shopping/InviteMemberModal';
 import CategorySection, { getCategoryStyle } from '../components/shopping/CategorySection';
 import FloatingAddButton from '../components/shopping/FloatingAddButton';
+import AddItemSheet from '../components/shopping/AddItemSheet';
 import ListSwitcher from '../components/lists/ListSwitcher';
 import CreateListModal from '../components/lists/CreateListModal';
 import EmptyListsState from '../components/lists/EmptyListsState';
@@ -123,9 +124,10 @@ export default function ShoppingList() {
         onCreateNew={() => setShowCreateListModal(true)}
       />
 
-      <LiveStatusBanner users={mockPresence} />
-
-      <LiveActivityBanner />
+      <div className="flex items-center gap-2">
+        <LiveStatusBanner users={mockPresence} />
+        <LiveActivityBanner />
+      </div>
 
       <ShoppingHeader
         title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
@@ -138,7 +140,12 @@ export default function ShoppingList() {
         onInvite={() => setShowInviteModal(true)}
       />
 
-      <ProgressBar totalItems={totalItems} completedItems={completedItems} label={t.progressLabel} />
+      <ProgressBar
+        totalItems={totalItems}
+        completedItems={completedItems}
+        label={t.progressLabel}
+        remainingLabel={t.remainingLabel}
+      />
 
       <ActivityFeed />
 
@@ -149,38 +156,35 @@ export default function ShoppingList() {
       <MembersPanel onInvite={() => setShowInviteModal(true)} />
 
       {categories.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 mb-1.5 px-1">{t.filterByCategory}</p>
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            <button
-              onClick={() => setSelectedCategory('all')}
-              className={`flex-shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition-all border ${
-                selectedCategory === 'all'
-                  ? 'bg-gray-800 text-white border-gray-800'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              {t.allCategories}
-            </button>
-            {categories.map((cat) => {
-              const style = getCategoryStyle(cat.name);
-              const active = selectedCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`flex-shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition-all border flex items-center gap-1 ${
-                    active
-                      ? `${style.fill} text-white border-transparent`
-                      : `bg-white ${style.text} border-gray-200 hover:border-gray-300`
-                  }`}
-                >
-                  <span>{style.icon}</span>
-                  {cat.name}
-                </button>
-              );
-            })}
-          </div>
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          {categories.map((cat) => {
+            const style = getCategoryStyle(cat.name);
+            const active = selectedCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`flex-shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition-all border flex items-center gap-1 ${
+                  active
+                    ? `${style.fill} text-white border-transparent`
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <span>{style.icon}</span>
+                {cat.name}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-all border ${
+              selectedCategory === 'all'
+                ? 'bg-violet-500 text-white border-violet-500'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            {t.allCategories}
+          </button>
         </div>
       )}
 
@@ -208,45 +212,20 @@ export default function ShoppingList() {
         </div>
       )}
 
-      {showAddForm && (
-        <div className="fixed bottom-24 inset-x-3 sm:inset-x-auto sm:right-6 sm:w-80 z-40 bg-white rounded-xl shadow-lg p-3 space-y-2">
-          <input
-            type="text"
-            autoFocus
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addItem()}
-            placeholder={t.placeholder}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">{t.allCategories}</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-          <div className="flex gap-2">
-            <button
-              onClick={addItem}
-              className="flex-1 bg-blue-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-600 transition-all"
-            >
-              {t.add}
-            </button>
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="px-4 rounded-lg border border-gray-200 text-gray-500 text-sm hover:bg-gray-50 transition-all"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
+      <AddItemSheet
+        open={showAddForm}
+        onClose={() => setShowAddForm(false)}
+        title={t.addItemTitle}
+        placeholder={t.placeholder}
+        value={input}
+        onChange={setInput}
+        onSubmit={addItem}
+        submitLabel={t.addToListButton}
+        categories={categories}
+        allCategoriesLabel={t.allCategories}
+        selectedCategory={selectedCategory}
+        onSelectCategory={setSelectedCategory}
+      />
 
       <FloatingAddButton onClick={() => setShowAddForm((v) => !v)} />
 

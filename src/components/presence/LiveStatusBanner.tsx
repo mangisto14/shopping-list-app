@@ -19,12 +19,12 @@ export default function LiveStatusBanner({ users }: LiveStatusBannerProps) {
 
   return (
     <div
-      className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium border transition-all ${
+      className={`flex-1 min-w-0 flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium border transition-all truncate ${
         noneOnline ? 'bg-gray-50 text-gray-500 border-gray-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'
       }`}
     >
-      <span className={`text-xs ${noneOnline ? '' : 'animate-pulse'}`}>{noneOnline ? '⚪' : '🟢'}</span>
-      {message}
+      <span className={`text-xs flex-shrink-0 ${noneOnline ? '' : 'animate-pulse'}`}>{noneOnline ? '⚪' : '🟢'}</span>
+      <span className="truncate">{message}</span>
     </div>
   );
 }
