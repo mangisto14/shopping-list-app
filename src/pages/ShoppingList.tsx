@@ -224,7 +224,7 @@ export default function ShoppingList() {
           <p>{t.empty}</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {Object.entries(groupedItems).map(([catId, itemsInCategory]) => {
             const category = categories.find((c) => c.id === catId) ?? null;
             return (

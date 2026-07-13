@@ -53,7 +53,7 @@ export default function CategorySection({
     <div>
       <button
         onClick={() => setExpanded((e) => !e)}
-        className="w-full flex items-center justify-between px-1 py-2 group"
+        className="w-full flex items-center justify-between px-1 py-1.5 group"
       >
         <span className="flex items-center gap-2">
           <span className="bg-violet-100 text-violet-700 rounded-full px-2.5 py-0.5 text-xs font-bold">
@@ -68,7 +68,7 @@ export default function CategorySection({
       </button>
 
       {expanded && (
-        <ul className="space-y-2 transition-all">
+        <ul className="space-y-2 mt-1.5 transition-all">
           {items.map((item) => (
             <ItemCard
               key={item.id}
