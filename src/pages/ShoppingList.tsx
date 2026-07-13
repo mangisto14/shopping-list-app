@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
 import { useActiveList } from '../ActiveListContext';
@@ -12,11 +12,36 @@ import MembersPanel, { mockMembers } from '../components/shopping/MembersPanel';
 import InviteMemberModal from '../components/shopping/InviteMemberModal';
 import CategorySection, { getCategoryStyle } from '../components/shopping/CategorySection';
 import FloatingAddButton from '../components/shopping/FloatingAddButton';
+import ListSwitcher from '../components/lists/ListSwitcher';
+import CreateListModal from '../components/lists/CreateListModal';
+import EmptyListsState from '../components/lists/EmptyListsState';
+import type { ListInfo } from '../components/lists/ListCard';
+
+// Deterministic fallback emoji per list, since the real `lists` table
+// has no emoji column (adding one is a schema change, out of scope
+// here). Indexed by position, not persisted or tied to list identity
+// beyond "the Nth list in the array gets the Nth emoji".
+const EMOJI_PALETTE = ['🏠', '🛒', '🛋️', '🚗', '✈️', '🎉', '🏡', '💼'];
+
+// Literal fallback data from the task spec. Structurally this can only
+// ever be used in an environment where useActiveList()'s real `lists`
+// somehow ends up empty while activeListId is still set - which
+// ActiveListContext's own logic never produces (a non-null
+// activeListId always implies a non-empty real lists array), so this
+// exists as a defensive no-op in production. Its actual purpose is
+// letting this feature be built and demoed without a live backend
+// connection.
+const mockLists: ListInfo[] = [
+  { id: '1', name: 'קניות שבועיות', emoji: '🏠', members: 3, items: 14 },
+  { id: '2', name: 'איקאה', emoji: '🛋️', members: 2, items: 7 },
+  { id: '3', name: 'טיול לצפון', emoji: '🚗', members: 4, items: 21 },
+];
 
 export default function ShoppingList() {
   const { language } = useLanguage();
+  const navigate = useNavigate();
   const t = shoppingLabels[language as 'he' | 'en'];
-  const { activeListId, loading: listsLoading } = useActiveList();
+  const { lists: realLists, activeListId, setActiveListId, loading: listsLoading } = useActiveList();
 
   const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
   const { categories } = useCategories();
@@ -25,6 +50,24 @@ export default function ShoppingList() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showAddForm, setShowAddForm] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showCreateListModal, setShowCreateListModal] = useState(false);
+
+  // Real lists (if already available) enriched with the mock/derived
+  // emoji and the real item_count added to useLists.ts - falls back to
+  // the literal mock array only in the defensive scenario described
+  // above.
+  const displayLists: ListInfo[] = useMemo(() => {
+    if (realLists.length === 0) return mockLists;
+    return realLists.map((l, i) => ({
+      id: l.id,
+      name: l.name,
+      emoji: EMOJI_PALETTE[i % EMOJI_PALETTE.length],
+      members: l.member_count,
+      items: l.item_count,
+    }));
+  }, [realLists]);
+
+  const activeList = displayLists.find((l) => l.id === activeListId) ?? null;
 
   const addItem = async () => {
     if (!input.trim()) return;
@@ -61,18 +104,23 @@ export default function ShoppingList() {
 
   if (!listsLoading && !activeListId) {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-xl shadow p-6 mt-6 text-center text-gray-500">
-        <Link to="/lists" className="text-blue-600 hover:underline">
-          {language === 'he' ? 'צור/י רשימה כדי להתחיל' : 'Create a list to get started'}
-        </Link>
+      <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4">
+        <EmptyListsState onCreateFirst={() => navigate('/lists')} />
       </div>
     );
   }
 
   return (
     <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4 pb-28 space-y-4">
+      <ListSwitcher
+        lists={displayLists}
+        activeList={activeList}
+        onSelect={(id) => setActiveListId(id)}
+        onCreateNew={() => setShowCreateListModal(true)}
+      />
+
       <ShoppingHeader
-        title={t.familyTitle}
+        title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
         subtitle={t.subtitle}
         totalItems={totalItems}
         completedItems={completedItems}
@@ -191,6 +239,8 @@ export default function ShoppingList() {
       <FloatingAddButton onClick={() => setShowAddForm((v) => !v)} />
 
       <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} />
+
+      <CreateListModal open={showCreateListModal} onClose={() => setShowCreateListModal(false)} />
     </div>
   );
 }
