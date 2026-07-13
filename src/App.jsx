@@ -6,6 +6,9 @@ import ShoppingList from './pages/ShoppingList';
 import CategoriesPage from './pages/Categories';
 import HistoryPage from './pages/History';
 import ListsPage from './pages/Lists';
+import Dashboard from './pages/Dashboard';
+import Statistics from './pages/Statistics';
+import FamilyMembers from './pages/FamilyMembers';
 
 import { useAuth } from './hooks/useAuth';
 import { useLanguage } from './LanguageContext';
@@ -20,6 +23,9 @@ export default function App() {
 const authenticatedRoutes = (
   <Routes>
     <Route path="/" element={<ShoppingList />} />
+    <Route path="/home" element={<Dashboard />} />
+    <Route path="/statistics" element={<Statistics />} />
+    <Route path="/family" element={<FamilyMembers />} />
     <Route path="/categories" element={<CategoriesPage />} />
     <Route path="/lists" element={<ListsPage />} />
     <Route path="/history" element={<HistoryPage />} />
