@@ -9,6 +9,7 @@ export interface ShoppingListSummary {
   owner_id: string;
   created_at: string;
   member_count: number;
+  item_count: number;
 }
 
 export function useLists() {
@@ -19,9 +20,13 @@ export function useLists() {
   const fetchLists = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    // items(count) mirrors the existing list_members(count) embed - a
+    // purely additive read, not a change to any CRUD operation. Lets
+    // the list switcher show real per-list item counts instead of a
+    // guess, without adding a new query anywhere.
     const { data, error } = await supabase
       .from('lists')
-      .select('id, name, owner_id, created_at, list_members(count)')
+      .select('id, name, owner_id, created_at, list_members(count), items(count)')
       .order('created_at', { ascending: true });
 
     if (!error && data) {
@@ -32,6 +37,7 @@ export function useLists() {
           owner_id: row.owner_id,
           created_at: row.created_at,
           member_count: row.list_members?.[0]?.count ?? 0,
+          item_count: row.items?.[0]?.count ?? 0,
         }))
       );
     }
