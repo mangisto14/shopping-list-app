@@ -1,6 +1,7 @@
 // src/components/shopping/ShoppingHeader.tsx
 import type { Member } from './MemberAvatar';
 import MemberAvatarGroup from './MemberAvatarGroup';
+import InviteMemberButton from './InviteMemberButton';
 
 interface ShoppingHeaderProps {
   title: string;
@@ -10,6 +11,7 @@ interface ShoppingHeaderProps {
   itemsLabel: string;
   completedLabel: string;
   members: Member[];
+  onInvite: () => void;
 }
 
 export default function ShoppingHeader({
@@ -20,6 +22,7 @@ export default function ShoppingHeader({
   itemsLabel,
   completedLabel,
   members,
+  onInvite,
 }: ShoppingHeaderProps) {
   return (
     <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl shadow-md p-5">
@@ -36,11 +39,12 @@ export default function ShoppingHeader({
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <MemberAvatarGroup members={members} />
           <span className="text-xs text-white/80 font-medium">
             {members.length} {members.length === 1 ? 'חבר/ה פעיל/ה' : 'חברים פעילים'}
           </span>
+          <InviteMemberButton onClick={onInvite} variant="solid" />
         </div>
       </div>
     </div>

@@ -9,6 +9,7 @@ import ShoppingHeader from '../components/shopping/ShoppingHeader';
 import ProgressBar from '../components/shopping/ProgressBar';
 import ActivityFeed from '../components/shopping/ActivityFeed';
 import MembersPanel, { mockMembers } from '../components/shopping/MembersPanel';
+import InviteMemberModal from '../components/shopping/InviteMemberModal';
 import CategorySection, { getCategoryStyle } from '../components/shopping/CategorySection';
 import FloatingAddButton from '../components/shopping/FloatingAddButton';
 
@@ -23,6 +24,7 @@ export default function ShoppingList() {
   const [input, setInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   const addItem = async () => {
     if (!input.trim()) return;
@@ -77,13 +79,14 @@ export default function ShoppingList() {
         itemsLabel={t.itemsCount}
         completedLabel={t.completedCount}
         members={mockMembers}
+        onInvite={() => setShowInviteModal(true)}
       />
 
       <ProgressBar totalItems={totalItems} completedItems={completedItems} label={t.progressLabel} />
 
       <ActivityFeed />
 
-      <MembersPanel />
+      <MembersPanel onInvite={() => setShowInviteModal(true)} />
 
       {categories.length > 0 && (
         <div>
@@ -186,6 +189,8 @@ export default function ShoppingList() {
       )}
 
       <FloatingAddButton onClick={() => setShowAddForm((v) => !v)} />
+
+      <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} />
     </div>
   );
 }
