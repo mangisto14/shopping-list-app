@@ -56,6 +56,15 @@ export default function ShoppingList() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showCreateListModal, setShowCreateListModal] = useState(false);
+  // Category chosen for the item currently being created. Deliberately
+  // separate from `selectedCategory` (the page filter) - they used to
+  // share one state, which meant picking a category in the add-item
+  // sheet silently changed which items were visible on the page, and
+  // leaving the filter on "all" while adding an item sent the literal
+  // string "all" as category_id, which the categories FK rejects and
+  // fails the insert with no feedback.
+  const [addItemCategory, setAddItemCategory] = useState('');
+  const [addItemError, setAddItemError] = useState('');
 
   // Real lists (if already available) enriched with the mock/derived
   // emoji and the real item_count added to useLists.ts - falls back to
@@ -74,15 +83,36 @@ export default function ShoppingList() {
 
   const activeList = displayLists.find((l) => l.id === activeListId) ?? null;
 
+  const openAddForm = () => {
+    setAddItemError('');
+    // Preselect the active page filter if it's a real category; otherwise
+    // default to the first available category. Leaves addItemCategory as
+    // '' when there are no categories at all, which addItem below treats
+    // as "no category required".
+    setAddItemCategory(selectedCategory !== 'all' ? selectedCategory : categories[0]?.id ?? '');
+    setShowAddForm(true);
+  };
+
+  const closeAddForm = () => {
+    setShowAddForm(false);
+    setAddItemError('');
+  };
+
   const addItem = async () => {
     if (!input.trim()) return;
-    // Preserving the existing `selectedCategory || null` expression as-is:
-    // since selectedCategory defaults to the truthy string 'all', this
-    // never actually evaluates to null while the "all" filter is active.
-    // Pre-existing behavior, not a regression introduced here - not in
-    // scope for a UI-only refactor to change.
-    await addItemToList(input, selectedCategory || null);
+    if (categories.length > 0 && !addItemCategory) {
+      setAddItemError('יש לבחור קטגוריה');
+      return;
+    }
+
+    const success = await addItemToList(input, addItemCategory || null);
+    if (!success) {
+      setAddItemError('שגיאה בהוספת הפריט. נסה שוב.');
+      return;
+    }
+
     setInput('');
+    setAddItemError('');
     setShowAddForm(false);
   };
 
@@ -214,7 +244,7 @@ export default function ShoppingList() {
 
       <AddItemSheet
         open={showAddForm}
-        onClose={() => setShowAddForm(false)}
+        onClose={closeAddForm}
         title={t.addItemTitle}
         placeholder={t.placeholder}
         value={input}
@@ -222,12 +252,16 @@ export default function ShoppingList() {
         onSubmit={addItem}
         submitLabel={t.addToListButton}
         categories={categories}
-        allCategoriesLabel={t.allCategories}
-        selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
+        categoryLabel={t.categoryLabel}
+        selectedCategory={addItemCategory}
+        onSelectCategory={(id) => {
+          setAddItemCategory(id);
+          setAddItemError('');
+        }}
+        errorMessage={addItemError}
       />
 
-      <FloatingAddButton onClick={() => setShowAddForm((v) => !v)} />
+      <FloatingAddButton onClick={() => (showAddForm ? closeAddForm() : openAddForm())} />
 
       <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} />
 

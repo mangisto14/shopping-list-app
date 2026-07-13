@@ -49,8 +49,8 @@ export function useItems() {
     onDelete: (id) => setItems((prev) => removeById(prev, id)),
   });
 
-  async function addItem(name: string, categoryId: string | null) {
-    if (!name.trim() || !user || !activeListId) return;
+  async function addItem(name: string, categoryId: string | null): Promise<boolean> {
+    if (!name.trim() || !user || !activeListId) return false;
 
     const tempId = `temp-${crypto.randomUUID()}`;
     const optimisticItem: Item = {
@@ -78,13 +78,15 @@ export function useItems() {
       .single();
 
     if (error || !data) {
+      console.error('addItem: insert failed', { name, categoryId, error });
       setItems((prev) => removeById(prev, tempId));
-      return;
+      return false;
     }
     // Replace the temp row with the real one. If the realtime echo of
     // this same insert has already arrived first, upsertById just
     // overwrites it in place - no duplicate either way.
     setItems((prev) => upsertById(removeById(prev, tempId), data));
+    return true;
   }
 
   async function toggleItem(item: Item) {

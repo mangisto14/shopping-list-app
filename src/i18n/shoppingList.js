@@ -19,6 +19,7 @@ export const shoppingLabels = {
     uncategorized: "ללא קטגוריה",
     addItemTitle: "הוספת פריט חדש",
     addToListButton: "הוסף לרשימה המשותפת",
+    categoryLabel: "קטגוריה",
   },
   en: {
     title: "Add Item",
@@ -40,5 +41,6 @@ export const shoppingLabels = {
     uncategorized: "Uncategorized",
     addItemTitle: "Add New Item",
     addToListButton: "Add to shared list",
+    categoryLabel: "Category",
   },
 };
