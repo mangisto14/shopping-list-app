@@ -6,12 +6,27 @@ export interface InviteLink {
   url: string;
 }
 
+// Priority: VITE_APP_URL, if set, wins - configure this in production/
+// preview deployments so invite links point at the canonical domain
+// (e.g. https://mangisto.best) rather than whatever host happened to
+// serve the page. Falls back to window.location.origin so this works
+// correctly with zero configuration in every other environment (local
+// dev, a Vercel preview URL, etc.) - e.g.
+// https://shopping-list.vercel.app/invite/ABC123.
+function getInviteBaseUrl(): string {
+  const configured = import.meta.env.VITE_APP_URL;
+  if (configured) return String(configured).replace(/\/+$/, '');
+  return window.location.origin;
+}
+
 // TODO (Future): generate a real, secure, per-list invite token
 // server-side (e.g. a signed token, or a row in a dedicated
-// invite_links table with an expiry) instead of this fixed mock value.
+// invite_links table with an expiry) instead of this fixed mock code.
+const MOCK_INVITE_CODE = 'ABC123';
+
 const MOCK_INVITE_LINK: InviteLink = {
-  code: 'ABC123',
-  url: 'https://shopping-list.app/invite/ABC123',
+  code: MOCK_INVITE_CODE,
+  url: `${getInviteBaseUrl()}/invite/${MOCK_INVITE_CODE}`,
 };
 
 export default function InviteLinkCard() {
