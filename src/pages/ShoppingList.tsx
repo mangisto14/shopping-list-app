@@ -7,6 +7,7 @@ import { useItems, type Item } from '../hooks/useItems';
 import { useCategories } from '../hooks/useCategories';
 import ShoppingHeader from '../components/shopping/ShoppingHeader';
 import ProgressBar from '../components/shopping/ProgressBar';
+import ActivityFeed from '../components/shopping/ActivityFeed';
 import CategorySection, { getCategoryStyle } from '../components/shopping/CategorySection';
 import FloatingAddButton from '../components/shopping/FloatingAddButton';
 
@@ -77,6 +78,8 @@ export default function ShoppingList() {
       />
 
       <ProgressBar totalItems={totalItems} completedItems={completedItems} label={t.progressLabel} />
+
+      <ActivityFeed />
 
       {categories.length > 0 && (
         <div>
