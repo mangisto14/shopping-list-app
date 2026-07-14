@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
 import { useActiveList } from '../ActiveListContext';
-import { useAuth } from '../hooks/useAuth';
 import { useItems, type Item } from '../hooks/useItems';
 import { useCategories } from '../hooks/useCategories';
-import { supabase } from '../supabase/client';
+import { useMembers } from '../hooks/useMembers';
 import type { Member } from '../components/ui/MemberAvatar';
 import ShoppingHeader from '../components/shopping/ShoppingHeader';
 import MembersPanel from '../components/shopping/MembersPanel';
@@ -35,7 +34,6 @@ export default function ShoppingList() {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const t = shoppingLabels[language as 'he' | 'en'];
-  const { user } = useAuth();
   const {
     lists: realLists,
     activeList: activeListReal,
@@ -46,6 +44,7 @@ export default function ShoppingList() {
 
   const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
   const { categories } = useCategories();
+  const { members: realMembers, currentUserId, inviteMember } = useMembers();
 
   const [input, setInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -62,35 +61,18 @@ export default function ShoppingList() {
   const [addItemCategory, setAddItemCategory] = useState('');
   const [addItemError, setAddItemError] = useState('');
 
-  // Real membership for the active list - same list_members query
-  // Lists.tsx/FamilyMembers.tsx already run. Replaces the old
-  // mockPresence array. No display name/avatar source exists yet (no
-  // profiles table), so each member renders from their real user_id,
-  // same convention FamilyMembers.tsx already established.
-  const [rawMembers, setRawMembers] = useState<{ user_id: string }[]>([]);
-
-  useEffect(() => {
-    if (!activeListId) {
-      setRawMembers([]);
-      return;
-    }
-    supabase
-      .from('list_members')
-      .select('user_id')
-      .eq('list_id', activeListId)
-      .then(({ data, error }) => {
-        if (!error && data) setRawMembers(data);
-      });
-  }, [activeListId]);
-
+  // Real membership for the active list via useMembers (list_members +
+  // profiles, real email, Realtime-backed) - mapped into the Member
+  // shape ShoppingHeader/PresencePanel/MembersPanel already expect, now
+  // with a real email instead of a truncated user_id.
   const members: Member[] = useMemo(
     () =>
-      rawMembers.map((m) => ({
-        id: m.user_id,
-        name: m.user_id === user?.id ? 'את/ה' : `${m.user_id.slice(0, 8)}…`,
-        avatar: m.user_id.slice(0, 2).toUpperCase(),
+      realMembers.map((m) => ({
+        id: m.userId,
+        name: m.userId === currentUserId ? 'את/ה' : m.email || `${m.userId.slice(0, 8)}…`,
+        avatar: m.email ? m.email.slice(0, 2).toUpperCase() : m.userId.slice(0, 2).toUpperCase(),
       })),
-    [rawMembers, user]
+    [realMembers, currentUserId]
   );
 
   // Real lists enriched with the deterministic emoji and real
@@ -281,7 +263,7 @@ export default function ShoppingList() {
 
       <FloatingAddButton onClick={() => (showAddForm ? closeAddForm() : openAddForm())} />
 
-      <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} />
+      <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} onInvite={inviteMember} />
 
       <CreateListModal open={showCreateListModal} onClose={() => setShowCreateListModal(false)} />
     </div>

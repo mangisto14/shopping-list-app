@@ -17,7 +17,7 @@ interface RealtimeHandlers<T extends { id: string }> {
 }
 
 export function useRealtimeTable<T extends { id: string }>(
-  table: 'items' | 'categories',
+  table: 'items' | 'categories' | 'list_members',
   listId: string | null,
   handlers: RealtimeHandlers<T>
 ) {

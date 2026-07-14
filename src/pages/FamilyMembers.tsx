@@ -1,48 +1,30 @@
 // src/pages/FamilyMembers.tsx
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabase/client';
-import { useAuth } from '../hooks/useAuth';
+import { useLanguage } from '../LanguageContext';
 import { useActiveList } from '../ActiveListContext';
+import { useMembers } from '../hooks/useMembers';
 import EmptyListsState from '../components/lists/EmptyListsState';
 import AppCard from '../components/ui/AppCard';
 import MemberAvatar from '../components/ui/MemberAvatar';
 import EmptyState from '../components/ui/EmptyState';
 import { PageSkeleton } from '../components/ui/Skeleton';
+import InviteMemberButton from '../components/shopping/InviteMemberButton';
+import InviteMemberModal from '../components/shopping/InviteMemberModal';
 
-interface Member {
-  user_id: string;
-}
-
-// Mirrors the exact list_members query Lists.tsx already runs - no new
-// hook, no new table, same real (if thin - no profiles table yet)
-// membership data. Not wrapped in useItems/useCategories-style hook
-// since no such hook exists for list_members; replicating the
-// existing inline-query pattern rather than inventing a new
-// abstraction for this Phase 1 pass.
 export default function FamilyMembers() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { language } = useLanguage();
   const { activeList, activeListId, loading: listsLoading } = useActiveList();
-  const [members, setMembers] = useState<Member[]>([]);
-  const [membersLoading, setMembersLoading] = useState(true);
+  const { members, loading: membersLoading, isOwner, currentUserId, inviteMember, removeMember } = useMembers();
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!activeListId) {
-      setMembers([]);
-      setMembersLoading(false);
-      return;
-    }
-    setMembersLoading(true);
-    supabase
-      .from('list_members')
-      .select('user_id')
-      .eq('list_id', activeListId)
-      .then(({ data, error }) => {
-        if (!error && data) setMembers(data);
-        setMembersLoading(false);
-      });
-  }, [activeListId]);
+  const handleRemove = async (userId: string) => {
+    setRemovingId(userId);
+    await removeMember(userId);
+    setRemovingId(null);
+  };
 
   if (listsLoading) {
     return <PageSkeleton />;
@@ -58,9 +40,16 @@ export default function FamilyMembers() {
 
   return (
     <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4 pb-10 space-y-4">
-      <div>
-        <h1 className="text-lg font-bold text-gray-800 px-1">בני המשפחה</h1>
-        {activeList && <p className="text-xs text-gray-400 px-1 mt-0.5 truncate">{activeList.name}</p>}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold text-gray-800 px-1">בני המשפחה</h1>
+          {activeList && <p className="text-xs text-gray-400 px-1 mt-0.5 truncate">{activeList.name}</p>}
+        </div>
+        {isOwner && (
+          <div className="flex-shrink-0">
+            <InviteMemberButton onClick={() => setShowInviteModal(true)} variant="ghost" />
+          </div>
+        )}
       </div>
 
       {membersLoading ? (
@@ -70,21 +59,42 @@ export default function FamilyMembers() {
       ) : (
         <div className="space-y-2">
           {members.map((m) => {
-            const isMe = m.user_id === user?.id;
-            const isOwner = activeList?.owner_id === m.user_id;
-            const name = isMe ? 'את/ה' : `${m.user_id.slice(0, 8)}…`;
+            const isMe = m.userId === currentUserId;
+            const initials = m.email ? m.email.slice(0, 2).toUpperCase() : '··';
+            const joinDate = new Date(m.joinedAt).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+            });
             return (
-              <AppCard key={m.user_id} className="flex items-center gap-3">
-                <MemberAvatar name={name} avatar={m.user_id.slice(0, 2).toUpperCase()} size="md" />
+              <AppCard key={m.id} className="flex items-center gap-3">
+                <MemberAvatar name={m.email || m.userId} avatar={initials} size="md" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{name}</p>
-                  <p className="text-xs text-gray-400">{isOwner ? 'בעל/ת הרשימה' : 'חבר/ה'}</p>
+                  <p className="text-sm font-semibold text-gray-800 truncate flex items-center gap-1.5">
+                    <span dir="ltr">{m.email || `${m.userId.slice(0, 8)}…`}</span>
+                    {isMe && <span className="text-xs font-normal text-gray-400">(את/ה)</span>}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {m.role === 'owner' ? 'בעל/ת הרשימה' : 'חבר/ה'} · הצטרפ/ה ב-{joinDate}
+                  </p>
                 </div>
+                {isOwner && m.role !== 'owner' && (
+                  <button
+                    onClick={() => handleRemove(m.userId)}
+                    disabled={removingId === m.userId}
+                    aria-label={language === 'he' ? 'הסר חבר' : 'Remove member'}
+                    className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors px-1 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-red-400 rounded"
+                  >
+                    🗑️
+                  </button>
+                )}
               </AppCard>
             );
           })}
         </div>
       )}
+
+      <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} onInvite={inviteMember} />
     </div>
   );
 }
