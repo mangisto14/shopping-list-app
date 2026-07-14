@@ -3,6 +3,8 @@
 **A real-time, collaborative shopping list for families and roommates.**
 
 [![CI](https://github.com/mangisto14/shopping-list-app/actions/workflows/ci.yml/badge.svg)](https://github.com/mangisto14/shopping-list-app/actions/workflows/ci.yml)
+[![E2E](https://github.com/mangisto14/shopping-list-app/actions/workflows/e2e.yml/badge.svg)](https://github.com/mangisto14/shopping-list-app/actions/workflows/e2e.yml)
+[![Supabase Migrations](https://github.com/mangisto14/shopping-list-app/actions/workflows/supabase-migrations.yml/badge.svg)](https://github.com/mangisto14/shopping-list-app/actions/workflows/supabase-migrations.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/mangisto14/shopping-list-app)
 
@@ -48,7 +50,8 @@ React + TypeScript (Vite)
 | Database | PostgreSQL with Row-Level Security |
 | Realtime sync | Supabase Realtime (`postgres_changes`) |
 | Hosting | Vercel |
-| CI | GitHub Actions (typecheck, lint, build) |
+| CI/CD | GitHub Actions (typecheck, lint, build, E2E, migration validation) |
+| E2E testing | Playwright |
 
 See [`docs/architecture-diagram.md`](docs/architecture-diagram.md) for the full data-flow diagram, including auth, RLS, and Realtime subscription details.
 
@@ -82,22 +85,46 @@ The anon key is safe to expose client-side by Supabase's design — access contr
 
 ## Deployment
 
-This project deploys to **Vercel** (see `vercel.json` for the SPA rewrite rule) and uses **GitHub Actions** for CI and database migrations.
+This project deploys to **Vercel** (see `vercel.json` for the SPA rewrite rule) and uses **GitHub Actions** for CI, end-to-end testing, and database migrations. No code reaches `main` unless TypeScript, lint, build, E2E, and migration validation all pass — pull requests are gated on all three workflows below.
 
 ### CI Pipeline
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) validates every change before it lands, on every pull request and every push to `main`. No secrets are required.
 
 **What it validates:**
-- **TypeScript** (`npx tsc --noEmit`) — the project compiles under `tsconfig.json`'s strict settings, with no type errors.
+- **TypeScript** (`npx tsc --noEmit`) — the project compiles under `tsconfig.json`'s strict settings, with no type errors. This includes the E2E suite and Playwright config (`tsconfig.json`'s `include` covers `src`, `e2e`, and `playwright.config.ts`), not just app source.
 - **Lint** (`npm run lint`) — ESLint rules pass with zero warnings allowed (`--max-warnings 0`).
 - **Build** (`npm run build`) — the production Vite build completes successfully, the same command Vercel runs on deploy.
 
 Any failing step stops the pipeline and marks the run as failed. A results table is always written to the workflow run's summary.
 
+### E2E Pipeline
+
+[`.github/workflows/e2e.yml`](.github/workflows/e2e.yml) runs the Playwright suite in `e2e/` on every pull request and every push to `main`. No secrets or live Supabase project are required — every test runs against a mocked Supabase REST/Auth/RPC API via Playwright's `page.route()` (see `e2e/fixtures.ts`), the same network-interception technique used throughout this project's manual testing. `playwright.config.ts` bakes in a syntactically-valid but fake `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` pair at build time, and every request to it is intercepted before it leaves the browser.
+
+**Critical flows covered:**
+- Register (success + duplicate-email error)
+- Login (success + invalid-credentials error)
+- Logout
+- Create Category (+ empty state)
+- Create Item (+ empty state)
+- Complete Item
+- Invite Member (success, user-not-found error, non-owner permissions)
+
+A failing test fails the workflow. Traces and screenshots for any failure are uploaded as a `playwright-report` artifact on the run (14-day retention), and a results table is written to the workflow run's summary.
+
+**Running E2E tests locally:**
+```bash
+npx playwright install --with-deps chromium   # first time only
+npm run test:e2e
+```
+
 ### Database Migrations
 
-The schema lives in `supabase/migrations/` as SQL files, managed with the [Supabase CLI](https://supabase.com/docs/guides/cli).
+The schema lives in `supabase/migrations/` as SQL files, managed with the [Supabase CLI](https://supabase.com/docs/guides/cli). [`.github/workflows/supabase-migrations.yml`](.github/workflows/supabase-migrations.yml) is split into two jobs so a broken migration is caught **before** it merges, not after:
+
+- **`validate`** — runs on every pull request that touches `supabase/migrations/**`, and again on push to `main`. Spins up a throwaway local Supabase stack (Postgres + GoTrue + PostgREST via Docker, no secrets needed) with `supabase start`, then applies every migration from scratch with `supabase db reset`. A SQL error, bad ordering assumption, or non-idempotent statement fails here, gating the PR. The list of migration files in the run and a validation summary are written to the workflow run's summary.
+- **`deploy`** — only runs on push to `main`, and only after `validate` succeeds (`needs: validate`, plus a redundant `if` guard as a second safety net). Links the real Supabase project and runs `supabase db push` to apply the already-validated migrations.
 
 **Creating a migration:**
 ```bash
@@ -105,9 +132,7 @@ supabase migration new <short_description>
 ```
 Prefer additive, idempotent statements (`create table if not exists`, `drop policy if exists` before `create policy`, etc.) so migrations can be safely re-run.
 
-**Deploying migrations:** pushing a commit to `main` that touches `supabase/migrations/**` automatically triggers [`.github/workflows/supabase-migrations.yml`](.github/workflows/supabase-migrations.yml), which links the Supabase project and runs `supabase db push`. It never runs on pull requests.
-
-Required GitHub Secrets (**Settings → Secrets and variables → Actions**):
+Required GitHub Secrets (**Settings → Secrets and variables → Actions**), used only by the `deploy` job:
 
 | Secret | Purpose |
 |---|---|

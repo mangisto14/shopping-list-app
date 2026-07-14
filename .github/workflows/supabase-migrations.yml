@@ -1,6 +1,9 @@
 name: Supabase Migrations
 
 on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
   push:
     branches:
       - main
@@ -19,9 +22,62 @@ permissions:
   contents: read
 
 jobs:
-  migrate:
+  # Runs on every PR that touches migrations, and again on push to
+  # main. Applies every migration file from scratch against a throwaway
+  # local Supabase stack (Postgres + GoTrue + PostgREST via Docker, no
+  # secrets needed) - this is what actually gates a PR: a migration
+  # with a SQL error, a bad ordering assumption, or a non-idempotent
+  # statement fails here before it ever reaches main, not after.
+  validate:
+    name: Validate migrations (local stack)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: List migration files
+        run: |
+          echo "### Migration files in this run" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          for f in supabase/migrations/*.sql; do
+            echo "- \`$(basename "$f")\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+          ls -1 supabase/migrations/
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase stack
+        id: start
+        run: supabase start
+
+      - name: Apply all migrations from scratch (db reset)
+        id: reset
+        run: supabase db reset
+
+      - name: Stop local stack
+        if: always()
+        run: supabase stop --no-backup
+
+      - name: Validation summary
+        if: always()
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Step | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Local stack start | ${{ steps.start.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Apply migrations (db reset) | ${{ steps.reset.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+
+  # Only runs on push to main, and only after validate succeeds -
+  # applies the same, already-validated migrations to the real project.
+  deploy:
     name: Apply Supabase migrations
     runs-on: ubuntu-latest
+    needs: validate
     # Belt-and-suspenders: the push/branches trigger above already
     # restricts this to main, but this explicit guard is a second,
     # independent safety net against ever running on a pull_request
@@ -60,11 +116,20 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
       - name: Apply migrations
+        id: push
         run: supabase db push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
-      - name: Migration success
-        if: success()
-        run: echo "Supabase migrations applied successfully."
+      - name: Migration summary
+        if: always()
+        run: |
+          echo "## Supabase Migration Deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Applied migrations:" >> "$GITHUB_STEP_SUMMARY"
+          for f in supabase/migrations/*.sql; do
+            echo "- \`$(basename "$f")\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**db push:** ${{ steps.push.outcome }}" >> "$GITHUB_STEP_SUMMARY"

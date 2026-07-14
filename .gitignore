@@ -24,3 +24,9 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Playwright E2E
+test-results
+playwright-report
+blob-report
+playwright/.cache

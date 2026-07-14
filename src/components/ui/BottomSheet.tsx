@@ -47,6 +47,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        data-testid="bottom-sheet"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         className={`relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-lg p-5 space-y-4 max-h-[85vh] overflow-y-auto transition-all duration-200 ${
           visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
