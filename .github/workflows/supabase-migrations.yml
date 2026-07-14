@@ -102,17 +102,28 @@ jobs:
         with:
           version: latest
 
-      - name: Validate migration files
-        run: supabase migration list --project-ref "$SUPABASE_PROJECT_ID"
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
-
+      # Must run before any command that touches the remote project -
+      # `migration list --linked` and `db push` below both operate on
+      # whatever project this links to. SUPABASE_DB_PASSWORD is required
+      # here too (not just for db push): `link` itself opens a connection
+      # to verify the database is reachable, and without a password in a
+      # non-interactive CI shell it would hang waiting on a prompt.
       - name: Link Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      # `supabase migration list` has no --project-ref flag - it only
+      # accepts --linked (diff against the project linked above),
+      # --local, or --db-url. Surfacing the local-vs-remote migration
+      # diff here, before db push applies it, means a reviewer can see
+      # exactly what's about to change in the log.
+      - name: Validate migrations against linked project
+        run: supabase migration list --linked
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
       - name: Apply migrations
