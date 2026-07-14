@@ -14,6 +14,7 @@ import { useAuth } from './hooks/useAuth';
 import { useLanguage } from './LanguageContext';
 import { ActiveListProvider } from './ActiveListContext';
 import HeaderMenu from './components/HeaderMenu2';
+import BottomNav from './components/navigation/BottomNav';
 export default function App() {
   const { language, setLanguage } = useLanguage();
   const { user, loading } = useAuth();
@@ -51,7 +52,7 @@ return (
         </div>
       </div>
 
-      <div className="w-full max-w-md p-4">
+      <div className={`w-full max-w-md p-4 ${user ? 'pb-28' : ''}`}>
         {user ? (
           <ActiveListProvider>{authenticatedRoutes}</ActiveListProvider>
         ) : (
@@ -62,6 +63,8 @@ return (
           </Routes>
         )}
       </div>
+
+      {user && <BottomNav />}
     </div>
   </BrowserRouter>
 );
