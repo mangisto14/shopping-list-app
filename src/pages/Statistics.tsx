@@ -6,6 +6,10 @@ import { useItems } from '../hooks/useItems';
 import { useCategories } from '../hooks/useCategories';
 import { getCategoryStyle } from '../components/shopping/CategorySection';
 import EmptyListsState from '../components/lists/EmptyListsState';
+import AppCard from '../components/ui/AppCard';
+import SectionHeader from '../components/ui/SectionHeader';
+import ProgressBar from '../components/ui/ProgressBar';
+import EmptyState from '../components/ui/EmptyState';
 
 // Deliberately no trend/history charts here: the `items` table has no
 // timestamp field, and the only table that does (`history`) has no
@@ -56,43 +60,32 @@ export default function Statistics() {
       <h1 className="text-lg font-bold text-gray-800 px-1">סטטיסטיקה</h1>
 
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-2xl shadow-sm p-4 text-center">
+        <AppCard className="text-center">
           <p className="text-2xl font-bold text-gray-800">{totalItems}</p>
           <p className="text-xs text-gray-500 mt-1">סה״כ פריטים</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm p-4 text-center">
+        </AppCard>
+        <AppCard className="text-center">
           <p className="text-2xl font-bold text-emerald-600">{completedItems}</p>
           <p className="text-xs text-gray-500 mt-1">נקנו</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm p-4 text-center">
+        </AppCard>
+        <AppCard className="text-center">
           <p className="text-2xl font-bold text-violet-600">{remainingItems}</p>
           <p className="text-xs text-gray-500 mt-1">נותרו</p>
-        </div>
+        </AppCard>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm p-4">
-        <div className="flex items-center justify-between text-sm font-medium text-gray-600 mb-2">
-          <span>אחוז השלמה כולל</span>
-          <span className="font-bold text-violet-600">{percentage}%</span>
-        </div>
-        <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-500 transition-all duration-500 ease-out"
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
-      </div>
+      <AppCard>
+        <ProgressBar percentage={percentage} label="אחוז השלמה כולל" />
+      </AppCard>
 
       <div>
-        <h2 className="text-base font-bold text-gray-800 mb-2 px-1">פילוח לפי קטגוריה</h2>
+        <SectionHeader title="פילוח לפי קטגוריה" />
         {categoryStats.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">
-            אין נתונים להצגה
-          </div>
+          <EmptyState icon="📊" title="אין נתונים להצגה" />
         ) : (
           <div className="space-y-2">
             {categoryStats.map((cat) => (
-              <div key={cat.id} className="bg-white rounded-2xl shadow-sm p-4">
+              <AppCard key={cat.id}>
                 <div className="flex items-center justify-between mb-2 gap-2">
                   <span className="flex items-center gap-2 font-semibold text-gray-800 text-sm min-w-0 truncate">
                     <span className="text-lg flex-shrink-0">{cat.style.icon}</span>
@@ -102,10 +95,8 @@ export default function Statistics() {
                     {cat.done}/{cat.total}
                   </span>
                 </div>
-                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${cat.style.fill}`} style={{ width: `${cat.percentage}%` }} />
-                </div>
-              </div>
+                <ProgressBar percentage={cat.percentage} height="sm" colorClassName={cat.style.fill} />
+              </AppCard>
             ))}
           </div>
         )}

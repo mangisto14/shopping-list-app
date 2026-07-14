@@ -1,5 +1,6 @@
 // src/components/presence/PresencePanel.tsx
-import type { Member } from '../shopping/MemberAvatar';
+import type { Member } from '../ui/MemberAvatar';
+import AppCard from '../ui/AppCard';
 
 interface PresencePanelProps {
   members: Member[];
@@ -11,7 +12,7 @@ interface PresencePanelProps {
 // changes), so this now shows real membership only, not presence.
 export default function PresencePanel({ members }: PresencePanelProps) {
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+    <AppCard rounded="xl" className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-700">מי ברשימה</h2>
         <span className="text-xs font-medium text-gray-500">{members.length} בני משפחה</span>
@@ -31,6 +32,6 @@ export default function PresencePanel({ members }: PresencePanelProps) {
           ))}
         </ul>
       )}
-    </div>
+    </AppCard>
   );
 }

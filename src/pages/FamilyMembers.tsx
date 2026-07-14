@@ -5,6 +5,9 @@ import { supabase } from '../supabase/client';
 import { useAuth } from '../hooks/useAuth';
 import { useActiveList } from '../ActiveListContext';
 import EmptyListsState from '../components/lists/EmptyListsState';
+import AppCard from '../components/ui/AppCard';
+import MemberAvatar from '../components/ui/MemberAvatar';
+import EmptyState from '../components/ui/EmptyState';
 
 interface Member {
   user_id: string;
@@ -56,28 +59,23 @@ export default function FamilyMembers() {
       </div>
 
       {membersLoading ? (
-        <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">טוען...</div>
+        <EmptyState icon="⏳" title="טוען..." />
       ) : members.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">
-          אין חברים ברשימה זו
-        </div>
+        <EmptyState icon="👨‍👩‍👧" title="אין עדיין חברים ברשימה זו" />
       ) : (
         <div className="space-y-2">
           {members.map((m) => {
             const isMe = m.user_id === user?.id;
             const isOwner = activeList?.owner_id === m.user_id;
+            const name = isMe ? 'את/ה' : `${m.user_id.slice(0, 8)}…`;
             return (
-              <div key={m.user_id} className="flex items-center gap-3 bg-white rounded-2xl shadow-sm px-4 py-3.5">
-                <span className="w-9 h-9 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                  {m.user_id.slice(0, 2).toUpperCase()}
-                </span>
+              <AppCard key={m.user_id} className="flex items-center gap-3">
+                <MemberAvatar name={name} avatar={m.user_id.slice(0, 2).toUpperCase()} size="md" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800 truncate">
-                    {isMe ? 'את/ה' : `${m.user_id.slice(0, 8)}…`}
-                  </p>
+                  <p className="text-sm font-semibold text-gray-800 truncate">{name}</p>
                   <p className="text-xs text-gray-400">{isOwner ? 'בעל/ת הרשימה' : 'חבר/ה'}</p>
                 </div>
-              </div>
+              </AppCard>
             );
           })}
         </div>

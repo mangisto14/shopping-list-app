@@ -1,6 +1,6 @@
 // src/components/shopping/MemberCard.tsx
-import type { Member } from './MemberAvatar';
-import MemberAvatar from './MemberAvatar';
+import type { Member } from '../ui/MemberAvatar';
+import MemberAvatar from '../ui/MemberAvatar';
 
 interface MemberCardProps {
   member: Member;

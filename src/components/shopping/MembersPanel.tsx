@@ -1,6 +1,6 @@
 // src/components/shopping/MembersPanel.tsx
 import { useState } from 'react';
-import type { Member } from './MemberAvatar';
+import type { Member } from '../ui/MemberAvatar';
 import MemberCard from './MemberCard';
 import InviteMemberButton from './InviteMemberButton';
 

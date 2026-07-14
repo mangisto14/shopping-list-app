@@ -8,6 +8,10 @@ import { useItems } from '../hooks/useItems';
 import { useCategories } from '../hooks/useCategories';
 import { getCategoryStyle } from '../components/shopping/CategorySection';
 import EmptyListsState from '../components/lists/EmptyListsState';
+import AppCard from '../components/ui/AppCard';
+import SectionHeader from '../components/ui/SectionHeader';
+import ProgressBar from '../components/ui/ProgressBar';
+import EmptyState from '../components/ui/EmptyState';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -54,7 +58,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4 pb-10 space-y-4">
-      <div className="bg-white rounded-2xl shadow-sm p-4">
+      <AppCard>
         <h1 className="text-lg font-bold text-gray-800 truncate">
           {activeList ? activeList.name : t.familyTitle}
         </h1>
@@ -68,20 +72,17 @@ export default function Dashboard() {
             {percentage}% {t.progressLabel}
           </span>
         </div>
-        <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden mt-2">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-500 transition-all duration-500 ease-out"
-            style={{ width: `${percentage}%` }}
-          />
+        <div className="mt-2">
+          <ProgressBar percentage={percentage} />
         </div>
         <p className="text-xs text-gray-400 mt-2">
           {remainingItems} {t.remainingLabel}
         </p>
-      </div>
+      </AppCard>
 
       {categoryStats.length > 0 && (
         <div>
-          <h2 className="text-base font-bold text-gray-800 mb-2 px-1">קטגוריות</h2>
+          <SectionHeader title="קטגוריות" />
           <div className="grid grid-cols-2 gap-3">
             {categoryStats.map((cat) => (
               <div key={cat.id} className={`rounded-2xl p-4 ${cat.style.bg}`}>
@@ -93,8 +94,8 @@ export default function Dashboard() {
                 <p className={`text-xs font-medium mt-0.5 ${cat.style.text}`}>
                   {cat.done}/{cat.total} {t.completedCount}
                 </p>
-                <div className="w-full h-1.5 bg-white/60 rounded-full overflow-hidden mt-2">
-                  <div className={`h-full rounded-full ${cat.style.fill}`} style={{ width: `${cat.percentage}%` }} />
+                <div className="mt-2">
+                  <ProgressBar percentage={cat.percentage} height="sm" colorClassName={cat.style.fill} trackClassName="bg-white/60" />
                 </div>
               </div>
             ))}
@@ -103,19 +104,19 @@ export default function Dashboard() {
       )}
 
       <div>
-        <h2 className="text-base font-bold text-gray-800 mb-2 px-1">עוד לקנות</h2>
+        <SectionHeader title="עוד לקנות" />
         {stillToBuy.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-400 text-sm">🎉 הכל נקנה</div>
+          <EmptyState icon="🎉" title="הכל נקנה" />
         ) : (
           <div className="space-y-2">
             {stillToBuy.map((item) => {
               const category = categories.find((c) => c.id === item.category_id) ?? null;
               const style = getCategoryStyle(category?.name);
               return (
-                <div key={item.id} className="flex items-center gap-3 bg-white rounded-2xl shadow-sm px-4 py-3">
+                <AppCard key={item.id} className="flex items-center gap-3">
                   <span className="text-lg flex-shrink-0">{style.icon}</span>
                   <p className="flex-1 min-w-0 truncate text-sm font-semibold text-gray-800">{item.name}</p>
-                </div>
+                </AppCard>
               );
             })}
           </div>

@@ -1,5 +1,5 @@
 // src/components/shopping/ShoppingHeader.tsx
-import type { Member } from './MemberAvatar';
+import type { Member } from '../ui/MemberAvatar';
 import MemberAvatarGroup from './MemberAvatarGroup';
 import InviteMemberButton from './InviteMemberButton';
 

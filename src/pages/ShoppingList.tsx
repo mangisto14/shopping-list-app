@@ -7,9 +7,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useItems, type Item } from '../hooks/useItems';
 import { useCategories } from '../hooks/useCategories';
 import { supabase } from '../supabase/client';
-import type { Member } from '../components/shopping/MemberAvatar';
+import type { Member } from '../components/ui/MemberAvatar';
 import ShoppingHeader from '../components/shopping/ShoppingHeader';
-import ProgressBar from '../components/shopping/ProgressBar';
 import MembersPanel from '../components/shopping/MembersPanel';
 import InviteMemberModal from '../components/shopping/InviteMemberModal';
 import CategorySection, { getCategoryStyle } from '../components/shopping/CategorySection';
@@ -20,6 +19,10 @@ import CreateListModal from '../components/lists/CreateListModal';
 import EmptyListsState from '../components/lists/EmptyListsState';
 import type { ListInfo } from '../components/lists/ListCard';
 import PresencePanel from '../components/presence/PresencePanel';
+import AppCard from '../components/ui/AppCard';
+import ProgressBar from '../components/ui/ProgressBar';
+import CategoryChip from '../components/ui/CategoryChip';
+import EmptyState from '../components/ui/EmptyState';
 
 // Deterministic fallback emoji per list, since the real `lists` table
 // has no emoji column (adding one is a schema change, out of scope
@@ -160,6 +163,8 @@ export default function ShoppingList() {
 
   const totalItems = items.length;
   const completedItems = items.filter((i) => i.is_done).length;
+  const remainingItems = totalItems - completedItems;
+  const completionPercentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
   if (!listsLoading && !activeListId) {
     return (
@@ -189,12 +194,17 @@ export default function ShoppingList() {
         onInvite={() => setShowInviteModal(true)}
       />
 
-      <ProgressBar
-        totalItems={totalItems}
-        completedItems={completedItems}
-        label={t.progressLabel}
-        remainingLabel={t.remainingLabel}
-      />
+      <AppCard>
+        <ProgressBar percentage={completionPercentage} />
+        <div className="flex items-center justify-between mt-2.5 text-sm font-medium text-gray-500">
+          <span>
+            {remainingItems} {t.remainingLabel}
+          </span>
+          <span className="font-semibold text-violet-600">
+            {completionPercentage}% {t.progressLabel}
+          </span>
+        </div>
+      </AppCard>
 
       <PresencePanel members={members} />
 
@@ -204,40 +214,28 @@ export default function ShoppingList() {
         <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
           {categories.map((cat) => {
             const style = getCategoryStyle(cat.name);
-            const active = selectedCategory === cat.id;
             return (
-              <button
+              <CategoryChip
                 key={cat.id}
+                icon={style.icon}
+                label={cat.name}
+                active={selectedCategory === cat.id}
+                activeClassName={style.fill}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`flex-shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition-all border flex items-center gap-1 ${
-                  active
-                    ? `${style.fill} text-white border-transparent`
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <span>{style.icon}</span>
-                {cat.name}
-              </button>
+              />
             );
           })}
-          <button
+          <CategoryChip
+            icon=""
+            label={t.allCategories}
+            active={selectedCategory === 'all'}
             onClick={() => setSelectedCategory('all')}
-            className={`flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-all border ${
-              selectedCategory === 'all'
-                ? 'bg-violet-500 text-white border-violet-500'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-            }`}
-          >
-            {t.allCategories}
-          </button>
+          />
         </div>
       )}
 
       {visibleItems.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
-          <p className="text-3xl mb-2">🛒</p>
-          <p>{t.empty}</p>
-        </div>
+        <EmptyState icon="🛒" title={t.empty} size="lg" />
       ) : (
         <div className="space-y-2">
           {Object.entries(groupedItems).map(([catId, itemsInCategory]) => {
