@@ -5,6 +5,8 @@ import { useActiveList } from '../ActiveListContext';
 import { useLanguage } from '../LanguageContext';
 import { listsLabels } from '../i18n/lists';
 import { supabase } from '../supabase/client';
+import EmptyState from '../components/ui/EmptyState';
+import Skeleton from '../components/ui/Skeleton';
 
 interface Member {
   user_id: string;
@@ -44,21 +46,32 @@ export default function Lists() {
       <h2 className="text-xl font-bold mb-4">{t.title}</h2>
 
       <div className="flex mb-4 gap-2">
+        <label htmlFor="new-list-input" className="sr-only">
+          {t.createPlaceholder}
+        </label>
         <input
+          id="new-list-input"
           value={newListName}
           onChange={(e) => setNewListName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           placeholder={t.createPlaceholder}
-          className="border p-2 rounded flex-1"
+          className="border p-2 rounded flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-        <button onClick={handleCreate} className="bg-blue-500 text-white px-4 rounded">
+        <button
+          onClick={handleCreate}
+          className="bg-blue-500 text-white px-4 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
           {t.create}
         </button>
       </div>
 
       {loading ? (
-        <p className="text-center text-gray-500">...</p>
+        <div className="space-y-2" aria-busy="true" aria-label="loading">
+          <Skeleton className="h-14 w-full rounded" />
+          <Skeleton className="h-14 w-full rounded" />
+        </div>
       ) : lists.length === 0 ? (
-        <p className="text-center text-gray-500">{t.empty}</p>
+        <EmptyState icon="🛍️" title={t.empty} />
       ) : (
         <ul className="space-y-2">
           {lists.map((list) => {

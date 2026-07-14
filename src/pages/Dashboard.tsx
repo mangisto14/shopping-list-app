@@ -12,6 +12,7 @@ import AppCard from '../components/ui/AppCard';
 import SectionHeader from '../components/ui/SectionHeader';
 import ProgressBar from '../components/ui/ProgressBar';
 import EmptyState from '../components/ui/EmptyState';
+import { PageSkeleton } from '../components/ui/Skeleton';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -48,7 +49,11 @@ export default function Dashboard() {
 
   const stillToBuy = useMemo(() => items.filter((i) => !i.is_done), [items]);
 
-  if (!listsLoading && !activeList) {
+  if (listsLoading) {
+    return <PageSkeleton />;
+  }
+
+  if (!activeList) {
     return (
       <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4">
         <EmptyListsState onCreateFirst={() => navigate('/lists')} />

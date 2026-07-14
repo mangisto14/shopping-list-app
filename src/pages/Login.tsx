@@ -3,6 +3,7 @@ import { supabase } from '../supabase/client';
 import { useNavigate, Link } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { loginLabels } from '../i18n/login';
+import { friendlyErrorMessage } from '../utils/friendlyError';
 
 export default function Login() {
   const { language } = useLanguage();
@@ -18,7 +19,7 @@ export default function Login() {
     setErrorMsg('');
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (!error) navigate('/');
-    else setErrorMsg(error.message);
+    else setErrorMsg(friendlyErrorMessage(error.message, language as 'he' | 'en', 'login'));
   };
 
   return (

@@ -10,6 +10,7 @@ import AppCard from '../components/ui/AppCard';
 import SectionHeader from '../components/ui/SectionHeader';
 import ProgressBar from '../components/ui/ProgressBar';
 import EmptyState from '../components/ui/EmptyState';
+import { PageSkeleton } from '../components/ui/Skeleton';
 
 // Deliberately no trend/history charts here: the `items` table has no
 // timestamp field, and the only table that does (`history`) has no
@@ -47,7 +48,11 @@ export default function Statistics() {
     [categories, items]
   );
 
-  if (!listsLoading && !activeList) {
+  if (listsLoading) {
+    return <PageSkeleton />;
+  }
+
+  if (!activeList) {
     return (
       <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4">
         <EmptyListsState onCreateFirst={() => navigate('/lists')} />

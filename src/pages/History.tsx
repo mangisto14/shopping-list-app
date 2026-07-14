@@ -2,16 +2,20 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../supabase/client';
 import { useAuth } from '../hooks/useAuth';
+import EmptyState from '../components/ui/EmptyState';
+import { PageSkeleton } from '../components/ui/Skeleton';
 
 export default function HistoryPage() {
   const { user } = useAuth();
   const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) fetchHistory();
   }, [user]);
 
   const fetchHistory = async () => {
+    setLoading(true);
     const { data } = await supabase
       .from('history')
       .select('*')
@@ -19,14 +23,19 @@ export default function HistoryPage() {
       .order('created_at', { ascending: false });
 
     setHistory(data || []);
+    setLoading(false);
   };
+
+  if (loading) {
+    return <PageSkeleton />;
+  }
 
   return (
     <div className="max-w-md mx-auto p-4">
       <h2 className="text-xl font-bold mb-4">היסטוריית קניות</h2>
 
       {history.length === 0 ? (
-        <p className="text-gray-500 text-center">אין רשימות קודמות</p>
+        <EmptyState icon="🧾" title="אין היסטוריית קניות עדיין" description="רשימות שתשלים/י יופיעו כאן" />
       ) : (
         <ul className="space-y-4">
           {history.map((entry) => (

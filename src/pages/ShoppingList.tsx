@@ -23,6 +23,7 @@ import AppCard from '../components/ui/AppCard';
 import ProgressBar from '../components/ui/ProgressBar';
 import CategoryChip from '../components/ui/CategoryChip';
 import EmptyState from '../components/ui/EmptyState';
+import { PageSkeleton } from '../components/ui/Skeleton';
 
 // Deterministic fallback emoji per list, since the real `lists` table
 // has no emoji column (adding one is a schema change, out of scope
@@ -166,7 +167,11 @@ export default function ShoppingList() {
   const remainingItems = totalItems - completedItems;
   const completionPercentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
-  if (!listsLoading && !activeListId) {
+  if (listsLoading) {
+    return <PageSkeleton />;
+  }
+
+  if (!activeListId) {
     return (
       <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4">
         <EmptyListsState onCreateFirst={() => navigate('/lists')} />

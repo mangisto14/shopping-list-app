@@ -8,6 +8,7 @@ import EmptyListsState from '../components/lists/EmptyListsState';
 import AppCard from '../components/ui/AppCard';
 import MemberAvatar from '../components/ui/MemberAvatar';
 import EmptyState from '../components/ui/EmptyState';
+import { PageSkeleton } from '../components/ui/Skeleton';
 
 interface Member {
   user_id: string;
@@ -43,7 +44,11 @@ export default function FamilyMembers() {
       });
   }, [activeListId]);
 
-  if (!listsLoading && !activeListId) {
+  if (listsLoading) {
+    return <PageSkeleton />;
+  }
+
+  if (!activeListId) {
     return (
       <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4">
         <EmptyListsState onCreateFirst={() => navigate('/lists')} />

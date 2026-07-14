@@ -19,7 +19,7 @@ export default function App() {
   const { language, setLanguage } = useLanguage();
   const { user, loading } = useAuth();
 
-  if (loading) return <div className="text-center mt-10">טוען...</div>;
+  if (loading) return <div className="text-center mt-10" role="status" aria-live="polite">טוען...</div>;
 
 const authenticatedRoutes = (
   <Routes>
@@ -41,10 +41,14 @@ return (
         {user && <HeaderMenu />}
 
         <div className="flex justify-end mb-4">
+          <label htmlFor="language-select" className="sr-only">
+            Language / שפה
+          </label>
           <select
+            id="language-select"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="border rounded p-1"
+            className="border rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="he">עברית</option>
             <option value="en">English</option>

@@ -28,6 +28,7 @@ const TABS = [
 export default function BottomNav() {
   return (
     <nav
+      aria-label="ניווט ראשי"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]"
     >
@@ -38,7 +39,7 @@ export default function BottomNav() {
             to={to}
             end={end}
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors active:scale-95 ${
+              `flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset ${
                 isActive ? 'text-violet-600' : 'text-gray-400 hover:text-gray-600'
               }`
             }
@@ -47,8 +48,8 @@ export default function BottomNav() {
               const TabIcon = isActive ? ActiveIcon : Icon;
               return (
                 <>
-                  <TabIcon className="size-6" />
-                  <span>{label}</span>
+                  <TabIcon className="size-6" aria-hidden="true" />
+                  <span aria-current={isActive ? 'page' : undefined}>{label}</span>
                 </>
               );
             }}
