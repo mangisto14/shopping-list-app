@@ -1,9 +1,15 @@
-// src/components/shopping/MemberAvatar.tsx
+// src/components/ui/MemberAvatar.tsx
+import { memo } from 'react';
+
 export interface Member {
   id: string;
   name: string;
   avatar: string;
-  online: boolean;
+  // Optional: real membership data has no presence signal without a
+  // Supabase Presence/Broadcast channel (not part of this UI-only
+  // phase). Omit rather than fabricate true/false; the presence dot
+  // below only renders when this is actually known.
+  online?: boolean;
 }
 
 interface MemberAvatarProps {
@@ -11,6 +17,10 @@ interface MemberAvatarProps {
   avatar: string;
   online?: boolean;
   size?: 'sm' | 'md' | 'lg';
+  // Small corner tag (e.g. "★" for owner) - optional, off by default so
+  // existing call sites that render their own separate role badge
+  // (MemberCard) are unaffected.
+  roleBadge?: string;
 }
 
 const SIZE_CLASSES: Record<NonNullable<MemberAvatarProps['size']>, string> = {
@@ -19,7 +29,10 @@ const SIZE_CLASSES: Record<NonNullable<MemberAvatarProps['size']>, string> = {
   lg: 'w-12 h-12 text-xl',
 };
 
-export default function MemberAvatar({ name, avatar, online, size = 'md' }: MemberAvatarProps) {
+// Single source of truth for member avatars - previously duplicated
+// as shopping/MemberAvatar.tsx (6 importers migrated here, old file
+// removed rather than kept alongside this one).
+function MemberAvatar({ name, avatar, online, size = 'md', roleBadge }: MemberAvatarProps) {
   return (
     <div className="relative inline-flex group">
       <span
@@ -36,9 +49,17 @@ export default function MemberAvatar({ name, avatar, online, size = 'md' }: Memb
         />
       )}
 
+      {roleBadge && (
+        <span className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-violet-500 text-white text-[9px] flex items-center justify-center border-2 border-white">
+          {roleBadge}
+        </span>
+      )}
+
       <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 text-white text-xs px-2 py-1 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all z-10">
         {name}
       </span>
     </div>
   );
 }
+
+export default memo(MemberAvatar);

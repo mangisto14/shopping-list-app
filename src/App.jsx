@@ -6,20 +6,27 @@ import ShoppingList from './pages/ShoppingList';
 import CategoriesPage from './pages/Categories';
 import HistoryPage from './pages/History';
 import ListsPage from './pages/Lists';
+import Dashboard from './pages/Dashboard';
+import Statistics from './pages/Statistics';
+import FamilyMembers from './pages/FamilyMembers';
 
 import { useAuth } from './hooks/useAuth';
 import { useLanguage } from './LanguageContext';
 import { ActiveListProvider } from './ActiveListContext';
 import HeaderMenu from './components/HeaderMenu2';
+import BottomNav from './components/navigation/BottomNav';
 export default function App() {
   const { language, setLanguage } = useLanguage();
   const { user, loading } = useAuth();
 
-  if (loading) return <div className="text-center mt-10">טוען...</div>;
+  if (loading) return <div className="text-center mt-10" role="status" aria-live="polite">טוען...</div>;
 
 const authenticatedRoutes = (
   <Routes>
     <Route path="/" element={<ShoppingList />} />
+    <Route path="/home" element={<Dashboard />} />
+    <Route path="/statistics" element={<Statistics />} />
+    <Route path="/family" element={<FamilyMembers />} />
     <Route path="/categories" element={<CategoriesPage />} />
     <Route path="/lists" element={<ListsPage />} />
     <Route path="/history" element={<HistoryPage />} />
@@ -34,10 +41,14 @@ return (
         {user && <HeaderMenu />}
 
         <div className="flex justify-end mb-4">
+          <label htmlFor="language-select" className="sr-only">
+            Language / שפה
+          </label>
           <select
+            id="language-select"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="border rounded p-1"
+            className="border rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="he">עברית</option>
             <option value="en">English</option>
@@ -45,7 +56,7 @@ return (
         </div>
       </div>
 
-      <div className="w-full max-w-md p-4">
+      <div className={`w-full max-w-md p-4 ${user ? 'pb-28' : ''}`}>
         {user ? (
           <ActiveListProvider>{authenticatedRoutes}</ActiveListProvider>
         ) : (
@@ -56,6 +67,8 @@ return (
           </Routes>
         )}
       </div>
+
+      {user && <BottomNav />}
     </div>
   </BrowserRouter>
 );

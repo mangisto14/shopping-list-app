@@ -40,7 +40,10 @@ export default function HeaderMenu() {
 ]
   return (
     <Popover className="relative">
-      <PopoverButton className="inline-flex items-center gap-x-1 text-sm/6 font-semibold text-gray-900">
+      <PopoverButton
+        aria-label={language === 'he' ? 'תפריט ניווט' : 'Navigation menu'}
+        className="inline-flex items-center gap-x-1 text-sm/6 font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+      >
         <Bars2Icon className="size-8 text-gray-600 group-hover:text-indigo-600"/>
       </PopoverButton>
 

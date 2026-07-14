@@ -4,6 +4,7 @@ import { supabase } from '../supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { registerLabels } from '../i18n/register';
+import { friendlyErrorMessage } from '../utils/friendlyError';
 
 export default function Register() {
   const { language } = useLanguage();
@@ -19,7 +20,7 @@ export default function Register() {
     setErrorMsg('');
     const { error } = await supabase.auth.signUp({ email, password });
     if (!error) navigate('/');
-    else setErrorMsg(error.message);
+    else setErrorMsg(friendlyErrorMessage(error.message, language as 'he' | 'en', 'register'));
   };
 
   return (

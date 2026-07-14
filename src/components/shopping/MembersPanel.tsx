@@ -1,28 +1,22 @@
 // src/components/shopping/MembersPanel.tsx
 import { useState } from 'react';
+import type { Member } from '../ui/MemberAvatar';
 import MemberCard from './MemberCard';
 import InviteMemberButton from './InviteMemberButton';
-import { mockPresence } from '../presence/PresencePanel';
-
-// TODO (Future): load members from the list_members table (already
-// used by useLists.ts / Lists.tsx) joined with a profiles table for
-// display name/avatar - list_members currently only stores user_id,
-// the same gap already flagged on the Lists page's member panel.
-// Realtime presence now has its own mock-backed components (see
-// src/components/presence/) - mockPresence there is the canonical
-// member/presence array, replacing what used to be a separate
-// mockMembers export here.
-// Invite UI now exists (InviteMemberButton -> InviteMemberModal), but
-// it's mock-only - see InviteMemberModal's own TODOs for connecting it
-// to list_members and a real accept-invite flow.
 
 interface MembersPanelProps {
+  members: Member[];
+  ownerId?: string;
   onInvite: () => void;
 }
 
-export default function MembersPanel({ onInvite }: MembersPanelProps) {
+// Was rendering the mockPresence array with a fake i===0 "isOwner"
+// guess and a fabricated online count. Now takes real members (from
+// the same list_members query Lists.tsx already runs) and derives
+// ownership from the list's real owner_id - no more guessing, no more
+// online claims we can't back up without a Presence channel.
+export default function MembersPanel({ members, ownerId, onInvite }: MembersPanelProps) {
   const [expanded, setExpanded] = useState(true);
-  const onlineCount = mockPresence.filter((m) => m.online).length;
 
   return (
     <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -35,7 +29,7 @@ export default function MembersPanel({ onInvite }: MembersPanelProps) {
           בני המשפחה
         </span>
         <span className="flex items-center gap-2 text-sm">
-          <span className="text-emerald-600 font-medium">{onlineCount} מחוברים</span>
+          <span className="text-gray-500 font-medium">{members.length} חברים</span>
           <span className={`inline-block transition-transform ${expanded ? 'rotate-180' : ''}`}>⌄</span>
         </span>
       </button>
@@ -43,11 +37,15 @@ export default function MembersPanel({ onInvite }: MembersPanelProps) {
       {expanded && (
         <div className="px-3 pb-3 space-y-3">
           <InviteMemberButton onClick={onInvite} variant="ghost" />
-          <div className="space-y-2">
-            {mockPresence.map((member, i) => (
-              <MemberCard key={member.id} member={member} isOwner={i === 0} />
-            ))}
-          </div>
+          {members.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-3">אין עדיין חברים ברשימה זו</p>
+          ) : (
+            <div className="space-y-2">
+              {members.map((member) => (
+                <MemberCard key={member.id} member={member} isOwner={member.id === ownerId} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

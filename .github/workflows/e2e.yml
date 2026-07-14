@@ -1,0 +1,62 @@
+name: E2E
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # Runs against a mocked Supabase backend (see e2e/fixtures.ts) -
+      # no live Supabase project or secrets are required. The build
+      # step inside playwright.config.ts's webServer bakes in a
+      # syntactically-valid but fake Supabase URL/key; every actual
+      # request to it is intercepted by page.route() in each test.
+      - name: Run E2E tests
+        id: e2e
+        run: npx playwright test
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: E2E summary
+        if: always()
+        run: |
+          echo "## E2E Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Suite | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Playwright (Register, Login, Logout, Create Category, Create Item, Complete Item, Invite Member) | ${{ steps.e2e.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.e2e.outcome }}" != "success" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "See the **playwright-report** artifact on this run for traces and screenshots of the failure." >> "$GITHUB_STEP_SUMMARY"
+          fi

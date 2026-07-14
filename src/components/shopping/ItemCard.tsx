@@ -26,22 +26,10 @@ export default function ItemCard({ item, categoryIcon, onToggle, onDelete, onRen
 
   return (
     <li
-      className={`flex items-center gap-3 px-4 py-3 transition-all hover:bg-gray-50 ${
+      className={`flex items-center gap-3 bg-white rounded-2xl shadow-sm px-4 py-3.5 transition-all hover:shadow-md ${
         item.is_done ? 'opacity-60' : ''
       }`}
     >
-      <button
-        onClick={onToggle}
-        aria-label="toggle item"
-        className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-          item.is_done
-            ? 'bg-emerald-500 border-emerald-500 text-white'
-            : 'border-gray-300 hover:border-emerald-400'
-        }`}
-      >
-        {item.is_done && <span className="text-xs leading-none">✓</span>}
-      </button>
-
       <div className="flex-1 min-w-0">
         {isEditing ? (
           <input
@@ -50,12 +38,12 @@ export default function ItemCard({ item, categoryIcon, onToggle, onDelete, onRen
             onChange={(e) => setName(e.target.value)}
             onBlur={handleSave}
             onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-            className="w-full border-b border-blue-400 bg-transparent focus:outline-none text-sm"
+            className="w-full border-b border-violet-400 bg-transparent focus:outline-none text-sm font-semibold"
           />
         ) : (
           <button
             onClick={() => setIsEditing(true)}
-            className={`w-full truncate text-sm font-medium ${
+            className={`w-full text-right truncate text-sm font-semibold ${
               item.is_done ? 'line-through text-gray-400' : 'text-gray-800'
             }`}
           >
@@ -67,17 +55,27 @@ export default function ItemCard({ item, categoryIcon, onToggle, onDelete, onRen
             profiles table yet - same limitation already flagged on the
             Lists page's member panel. Placeholder only, not wired to
             item.user_id. */}
-        <p className="text-xs text-gray-400 mt-0.5">נוסף ע״י חבר</p>
+        <p className="text-xs text-gray-400 mt-0.5">נוסף ע״י חבר{categoryIcon ? ` · ${categoryIcon}` : ''}</p>
       </div>
-
-      {categoryIcon && <span className="flex-shrink-0 text-lg opacity-70">{categoryIcon}</span>}
 
       <button
         onClick={onDelete}
         aria-label="delete item"
-        className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors px-1"
+        className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors px-1 text-sm"
       >
         🗑️
+      </button>
+
+      <button
+        onClick={onToggle}
+        aria-label="toggle item"
+        className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+          item.is_done
+            ? 'bg-emerald-500 border-emerald-500 text-white'
+            : 'border-gray-300 hover:border-emerald-400'
+        }`}
+      >
+        {item.is_done && <span className="text-sm leading-none">✓</span>}
       </button>
     </li>
   );

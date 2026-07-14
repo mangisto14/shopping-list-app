@@ -5,21 +5,24 @@ import { shoppingLabels } from '../i18n/shoppingList';
 import { useActiveList } from '../ActiveListContext';
 import { useItems, type Item } from '../hooks/useItems';
 import { useCategories } from '../hooks/useCategories';
+import { useMembers } from '../hooks/useMembers';
+import type { Member } from '../components/ui/MemberAvatar';
 import ShoppingHeader from '../components/shopping/ShoppingHeader';
-import ProgressBar from '../components/shopping/ProgressBar';
-import ActivityFeed from '../components/shopping/ActivityFeed';
 import MembersPanel from '../components/shopping/MembersPanel';
 import InviteMemberModal from '../components/shopping/InviteMemberModal';
 import CategorySection, { getCategoryStyle } from '../components/shopping/CategorySection';
 import FloatingAddButton from '../components/shopping/FloatingAddButton';
+import AddItemSheet from '../components/shopping/AddItemSheet';
 import ListSwitcher from '../components/lists/ListSwitcher';
 import CreateListModal from '../components/lists/CreateListModal';
 import EmptyListsState from '../components/lists/EmptyListsState';
 import type { ListInfo } from '../components/lists/ListCard';
-import LiveStatusBanner from '../components/presence/LiveStatusBanner';
-import PresencePanel, { mockPresence } from '../components/presence/PresencePanel';
-import LiveActivityBanner from '../components/live/LiveActivityBanner';
-import LiveEditingPanel from '../components/live/LiveEditingPanel';
+import PresencePanel from '../components/presence/PresencePanel';
+import AppCard from '../components/ui/AppCard';
+import ProgressBar from '../components/ui/ProgressBar';
+import CategoryChip from '../components/ui/CategoryChip';
+import EmptyState from '../components/ui/EmptyState';
+import { PageSkeleton } from '../components/ui/Skeleton';
 
 // Deterministic fallback emoji per list, since the real `lists` table
 // has no emoji column (adding one is a schema change, out of scope
@@ -27,61 +30,99 @@ import LiveEditingPanel from '../components/live/LiveEditingPanel';
 // beyond "the Nth list in the array gets the Nth emoji".
 const EMOJI_PALETTE = ['🏠', '🛒', '🛋️', '🚗', '✈️', '🎉', '🏡', '💼'];
 
-// Literal fallback data from the task spec. Structurally this can only
-// ever be used in an environment where useActiveList()'s real `lists`
-// somehow ends up empty while activeListId is still set - which
-// ActiveListContext's own logic never produces (a non-null
-// activeListId always implies a non-empty real lists array), so this
-// exists as a defensive no-op in production. Its actual purpose is
-// letting this feature be built and demoed without a live backend
-// connection.
-const mockLists: ListInfo[] = [
-  { id: '1', name: 'קניות שבועיות', emoji: '🏠', members: 3, items: 14 },
-  { id: '2', name: 'איקאה', emoji: '🛋️', members: 2, items: 7 },
-  { id: '3', name: 'טיול לצפון', emoji: '🚗', members: 4, items: 21 },
-];
-
 export default function ShoppingList() {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const t = shoppingLabels[language as 'he' | 'en'];
-  const { lists: realLists, activeListId, setActiveListId, loading: listsLoading } = useActiveList();
+  const {
+    lists: realLists,
+    activeList: activeListReal,
+    activeListId,
+    setActiveListId,
+    loading: listsLoading,
+  } = useActiveList();
 
   const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
   const { categories } = useCategories();
+  const { members: realMembers, currentUserId, inviteMember } = useMembers();
 
   const [input, setInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showAddForm, setShowAddForm] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showCreateListModal, setShowCreateListModal] = useState(false);
+  // Category chosen for the item currently being created. Deliberately
+  // separate from `selectedCategory` (the page filter) - they used to
+  // share one state, which meant picking a category in the add-item
+  // sheet silently changed which items were visible on the page, and
+  // leaving the filter on "all" while adding an item sent the literal
+  // string "all" as category_id, which the categories FK rejects and
+  // fails the insert with no feedback.
+  const [addItemCategory, setAddItemCategory] = useState('');
+  const [addItemError, setAddItemError] = useState('');
 
-  // Real lists (if already available) enriched with the mock/derived
-  // emoji and the real item_count added to useLists.ts - falls back to
-  // the literal mock array only in the defensive scenario described
-  // above.
-  const displayLists: ListInfo[] = useMemo(() => {
-    if (realLists.length === 0) return mockLists;
-    return realLists.map((l, i) => ({
-      id: l.id,
-      name: l.name,
-      emoji: EMOJI_PALETTE[i % EMOJI_PALETTE.length],
-      members: l.member_count,
-      items: l.item_count,
-    }));
-  }, [realLists]);
+  // Real membership for the active list via useMembers (list_members +
+  // profiles, real email, Realtime-backed) - mapped into the Member
+  // shape ShoppingHeader/PresencePanel/MembersPanel already expect, now
+  // with a real email instead of a truncated user_id.
+  const members: Member[] = useMemo(
+    () =>
+      realMembers.map((m) => ({
+        id: m.userId,
+        name: m.userId === currentUserId ? 'את/ה' : m.email || `${m.userId.slice(0, 8)}…`,
+        avatar: m.email ? m.email.slice(0, 2).toUpperCase() : m.userId.slice(0, 2).toUpperCase(),
+      })),
+    [realMembers, currentUserId]
+  );
+
+  // Real lists enriched with the deterministic emoji and real
+  // item_count from useLists.ts. No mock fallback: an empty realLists
+  // array now renders as an honest empty list, not fabricated demo
+  // lists.
+  const displayLists: ListInfo[] = useMemo(
+    () =>
+      realLists.map((l, i) => ({
+        id: l.id,
+        name: l.name,
+        emoji: EMOJI_PALETTE[i % EMOJI_PALETTE.length],
+        members: l.member_count,
+        items: l.item_count,
+      })),
+    [realLists]
+  );
 
   const activeList = displayLists.find((l) => l.id === activeListId) ?? null;
 
+  const openAddForm = () => {
+    setAddItemError('');
+    // Preselect the active page filter if it's a real category; otherwise
+    // default to the first available category. Leaves addItemCategory as
+    // '' when there are no categories at all, which addItem below treats
+    // as "no category required".
+    setAddItemCategory(selectedCategory !== 'all' ? selectedCategory : categories[0]?.id ?? '');
+    setShowAddForm(true);
+  };
+
+  const closeAddForm = () => {
+    setShowAddForm(false);
+    setAddItemError('');
+  };
+
   const addItem = async () => {
     if (!input.trim()) return;
-    // Preserving the existing `selectedCategory || null` expression as-is:
-    // since selectedCategory defaults to the truthy string 'all', this
-    // never actually evaluates to null while the "all" filter is active.
-    // Pre-existing behavior, not a regression introduced here - not in
-    // scope for a UI-only refactor to change.
-    await addItemToList(input, selectedCategory || null);
+    if (categories.length > 0 && !addItemCategory) {
+      setAddItemError('יש לבחור קטגוריה');
+      return;
+    }
+
+    const success = await addItemToList(input, addItemCategory || null);
+    if (!success) {
+      setAddItemError('שגיאה בהוספת הפריט. נסה שוב.');
+      return;
+    }
+
     setInput('');
+    setAddItemError('');
     setShowAddForm(false);
   };
 
@@ -105,8 +146,14 @@ export default function ShoppingList() {
 
   const totalItems = items.length;
   const completedItems = items.filter((i) => i.is_done).length;
+  const remainingItems = totalItems - completedItems;
+  const completionPercentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
-  if (!listsLoading && !activeListId) {
+  if (listsLoading) {
+    return <PageSkeleton />;
+  }
+
+  if (!activeListId) {
     return (
       <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4">
         <EmptyListsState onCreateFirst={() => navigate('/lists')} />
@@ -123,10 +170,6 @@ export default function ShoppingList() {
         onCreateNew={() => setShowCreateListModal(true)}
       />
 
-      <LiveStatusBanner users={mockPresence} />
-
-      <LiveActivityBanner />
-
       <ShoppingHeader
         title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
         subtitle={t.subtitle}
@@ -134,63 +177,54 @@ export default function ShoppingList() {
         completedItems={completedItems}
         itemsLabel={t.itemsCount}
         completedLabel={t.completedCount}
-        members={mockPresence}
+        members={members}
         onInvite={() => setShowInviteModal(true)}
       />
 
-      <ProgressBar totalItems={totalItems} completedItems={completedItems} label={t.progressLabel} />
+      <AppCard>
+        <ProgressBar percentage={completionPercentage} />
+        <div className="flex items-center justify-between mt-2.5 text-sm font-medium text-gray-500">
+          <span>
+            {remainingItems} {t.remainingLabel}
+          </span>
+          <span className="font-semibold text-violet-600">
+            {completionPercentage}% {t.progressLabel}
+          </span>
+        </div>
+      </AppCard>
 
-      <ActivityFeed />
+      <PresencePanel members={members} />
 
-      <LiveEditingPanel />
-
-      <PresencePanel />
-
-      <MembersPanel onInvite={() => setShowInviteModal(true)} />
+      <MembersPanel members={members} ownerId={activeListReal?.owner_id} onInvite={() => setShowInviteModal(true)} />
 
       {categories.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 mb-1.5 px-1">{t.filterByCategory}</p>
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            <button
-              onClick={() => setSelectedCategory('all')}
-              className={`flex-shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition-all border ${
-                selectedCategory === 'all'
-                  ? 'bg-gray-800 text-white border-gray-800'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              {t.allCategories}
-            </button>
-            {categories.map((cat) => {
-              const style = getCategoryStyle(cat.name);
-              const active = selectedCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`flex-shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition-all border flex items-center gap-1 ${
-                    active
-                      ? `${style.fill} text-white border-transparent`
-                      : `bg-white ${style.text} border-gray-200 hover:border-gray-300`
-                  }`}
-                >
-                  <span>{style.icon}</span>
-                  {cat.name}
-                </button>
-              );
-            })}
-          </div>
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          {categories.map((cat) => {
+            const style = getCategoryStyle(cat.name);
+            return (
+              <CategoryChip
+                key={cat.id}
+                icon={style.icon}
+                label={cat.name}
+                active={selectedCategory === cat.id}
+                activeClassName={style.fill}
+                onClick={() => setSelectedCategory(cat.id)}
+              />
+            );
+          })}
+          <CategoryChip
+            icon=""
+            label={t.allCategories}
+            active={selectedCategory === 'all'}
+            onClick={() => setSelectedCategory('all')}
+          />
         </div>
       )}
 
       {visibleItems.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
-          <p className="text-3xl mb-2">🛒</p>
-          <p>{t.empty}</p>
-        </div>
+        <EmptyState icon="🛒" title={t.empty} size="lg" />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {Object.entries(groupedItems).map(([catId, itemsInCategory]) => {
             const category = categories.find((c) => c.id === catId) ?? null;
             return (
@@ -208,49 +242,28 @@ export default function ShoppingList() {
         </div>
       )}
 
-      {showAddForm && (
-        <div className="fixed bottom-24 inset-x-3 sm:inset-x-auto sm:right-6 sm:w-80 z-40 bg-white rounded-xl shadow-lg p-3 space-y-2">
-          <input
-            type="text"
-            autoFocus
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addItem()}
-            placeholder={t.placeholder}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">{t.allCategories}</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-          <div className="flex gap-2">
-            <button
-              onClick={addItem}
-              className="flex-1 bg-blue-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-600 transition-all"
-            >
-              {t.add}
-            </button>
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="px-4 rounded-lg border border-gray-200 text-gray-500 text-sm hover:bg-gray-50 transition-all"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
+      <AddItemSheet
+        open={showAddForm}
+        onClose={closeAddForm}
+        title={t.addItemTitle}
+        placeholder={t.placeholder}
+        value={input}
+        onChange={setInput}
+        onSubmit={addItem}
+        submitLabel={t.addToListButton}
+        categories={categories}
+        categoryLabel={t.categoryLabel}
+        selectedCategory={addItemCategory}
+        onSelectCategory={(id) => {
+          setAddItemCategory(id);
+          setAddItemError('');
+        }}
+        errorMessage={addItemError}
+      />
 
-      <FloatingAddButton onClick={() => setShowAddForm((v) => !v)} />
+      <FloatingAddButton onClick={() => (showAddForm ? closeAddForm() : openAddForm())} />
 
-      <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} />
+      <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} onInvite={inviteMember} />
 
       <CreateListModal open={showCreateListModal} onClose={() => setShowCreateListModal(false)} />
     </div>
