@@ -3,7 +3,11 @@ export interface Member {
   id: string;
   name: string;
   avatar: string;
-  online: boolean;
+  // Optional: real membership data has no presence signal without a
+  // Supabase Presence/Broadcast channel (out of scope - no realtime
+  // changes this phase). Omit rather than fabricate true/false; the
+  // presence dot below only renders when this is actually known.
+  online?: boolean;
 }
 
 interface MemberAvatarProps {

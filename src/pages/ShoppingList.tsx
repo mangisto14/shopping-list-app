@@ -1,13 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
 import { useActiveList } from '../ActiveListContext';
+import { useAuth } from '../hooks/useAuth';
 import { useItems, type Item } from '../hooks/useItems';
 import { useCategories } from '../hooks/useCategories';
+import { supabase } from '../supabase/client';
+import type { Member } from '../components/shopping/MemberAvatar';
 import ShoppingHeader from '../components/shopping/ShoppingHeader';
 import ProgressBar from '../components/shopping/ProgressBar';
-import ActivityFeed from '../components/shopping/ActivityFeed';
 import MembersPanel from '../components/shopping/MembersPanel';
 import InviteMemberModal from '../components/shopping/InviteMemberModal';
 import CategorySection, { getCategoryStyle } from '../components/shopping/CategorySection';
@@ -17,10 +19,7 @@ import ListSwitcher from '../components/lists/ListSwitcher';
 import CreateListModal from '../components/lists/CreateListModal';
 import EmptyListsState from '../components/lists/EmptyListsState';
 import type { ListInfo } from '../components/lists/ListCard';
-import LiveStatusBanner from '../components/presence/LiveStatusBanner';
-import PresencePanel, { mockPresence } from '../components/presence/PresencePanel';
-import LiveActivityBanner from '../components/live/LiveActivityBanner';
-import LiveEditingPanel from '../components/live/LiveEditingPanel';
+import PresencePanel from '../components/presence/PresencePanel';
 
 // Deterministic fallback emoji per list, since the real `lists` table
 // has no emoji column (adding one is a schema change, out of scope
@@ -28,25 +27,18 @@ import LiveEditingPanel from '../components/live/LiveEditingPanel';
 // beyond "the Nth list in the array gets the Nth emoji".
 const EMOJI_PALETTE = ['🏠', '🛒', '🛋️', '🚗', '✈️', '🎉', '🏡', '💼'];
 
-// Literal fallback data from the task spec. Structurally this can only
-// ever be used in an environment where useActiveList()'s real `lists`
-// somehow ends up empty while activeListId is still set - which
-// ActiveListContext's own logic never produces (a non-null
-// activeListId always implies a non-empty real lists array), so this
-// exists as a defensive no-op in production. Its actual purpose is
-// letting this feature be built and demoed without a live backend
-// connection.
-const mockLists: ListInfo[] = [
-  { id: '1', name: 'קניות שבועיות', emoji: '🏠', members: 3, items: 14 },
-  { id: '2', name: 'איקאה', emoji: '🛋️', members: 2, items: 7 },
-  { id: '3', name: 'טיול לצפון', emoji: '🚗', members: 4, items: 21 },
-];
-
 export default function ShoppingList() {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const t = shoppingLabels[language as 'he' | 'en'];
-  const { lists: realLists, activeListId, setActiveListId, loading: listsLoading } = useActiveList();
+  const { user } = useAuth();
+  const {
+    lists: realLists,
+    activeList: activeListReal,
+    activeListId,
+    setActiveListId,
+    loading: listsLoading,
+  } = useActiveList();
 
   const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
   const { categories } = useCategories();
@@ -66,20 +58,52 @@ export default function ShoppingList() {
   const [addItemCategory, setAddItemCategory] = useState('');
   const [addItemError, setAddItemError] = useState('');
 
-  // Real lists (if already available) enriched with the mock/derived
-  // emoji and the real item_count added to useLists.ts - falls back to
-  // the literal mock array only in the defensive scenario described
-  // above.
-  const displayLists: ListInfo[] = useMemo(() => {
-    if (realLists.length === 0) return mockLists;
-    return realLists.map((l, i) => ({
-      id: l.id,
-      name: l.name,
-      emoji: EMOJI_PALETTE[i % EMOJI_PALETTE.length],
-      members: l.member_count,
-      items: l.item_count,
-    }));
-  }, [realLists]);
+  // Real membership for the active list - same list_members query
+  // Lists.tsx/FamilyMembers.tsx already run. Replaces the old
+  // mockPresence array. No display name/avatar source exists yet (no
+  // profiles table), so each member renders from their real user_id,
+  // same convention FamilyMembers.tsx already established.
+  const [rawMembers, setRawMembers] = useState<{ user_id: string }[]>([]);
+
+  useEffect(() => {
+    if (!activeListId) {
+      setRawMembers([]);
+      return;
+    }
+    supabase
+      .from('list_members')
+      .select('user_id')
+      .eq('list_id', activeListId)
+      .then(({ data, error }) => {
+        if (!error && data) setRawMembers(data);
+      });
+  }, [activeListId]);
+
+  const members: Member[] = useMemo(
+    () =>
+      rawMembers.map((m) => ({
+        id: m.user_id,
+        name: m.user_id === user?.id ? 'את/ה' : `${m.user_id.slice(0, 8)}…`,
+        avatar: m.user_id.slice(0, 2).toUpperCase(),
+      })),
+    [rawMembers, user]
+  );
+
+  // Real lists enriched with the deterministic emoji and real
+  // item_count from useLists.ts. No mock fallback: an empty realLists
+  // array now renders as an honest empty list, not fabricated demo
+  // lists.
+  const displayLists: ListInfo[] = useMemo(
+    () =>
+      realLists.map((l, i) => ({
+        id: l.id,
+        name: l.name,
+        emoji: EMOJI_PALETTE[i % EMOJI_PALETTE.length],
+        members: l.member_count,
+        items: l.item_count,
+      })),
+    [realLists]
+  );
 
   const activeList = displayLists.find((l) => l.id === activeListId) ?? null;
 
@@ -154,11 +178,6 @@ export default function ShoppingList() {
         onCreateNew={() => setShowCreateListModal(true)}
       />
 
-      <div className="flex items-center gap-2">
-        <LiveStatusBanner users={mockPresence} />
-        <LiveActivityBanner />
-      </div>
-
       <ShoppingHeader
         title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
         subtitle={t.subtitle}
@@ -166,7 +185,7 @@ export default function ShoppingList() {
         completedItems={completedItems}
         itemsLabel={t.itemsCount}
         completedLabel={t.completedCount}
-        members={mockPresence}
+        members={members}
         onInvite={() => setShowInviteModal(true)}
       />
 
@@ -177,13 +196,9 @@ export default function ShoppingList() {
         remainingLabel={t.remainingLabel}
       />
 
-      <ActivityFeed />
+      <PresencePanel members={members} />
 
-      <LiveEditingPanel />
-
-      <PresencePanel />
-
-      <MembersPanel onInvite={() => setShowInviteModal(true)} />
+      <MembersPanel members={members} ownerId={activeListReal?.owner_id} onInvite={() => setShowInviteModal(true)} />
 
       {categories.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">

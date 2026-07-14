@@ -1,5 +1,6 @@
 // src/components/lists/CreateListModal.tsx
 import { useEffect, useState, type FormEvent } from 'react';
+import { useActiveList } from '../../ActiveListContext';
 
 const EMOJI_OPTIONS = ['🏠', '🛒', '🛋️', '🚗', '🎉', '✈️', '🏡', '🍔', '💼', '🎓'];
 
@@ -9,9 +10,12 @@ interface CreateListModalProps {
 }
 
 export default function CreateListModal({ open, onClose }: CreateListModalProps) {
+  const { createList } = useActiveList();
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState(EMOJI_OPTIONS[0]);
   const [created, setCreated] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -32,18 +36,36 @@ export default function CreateListModal({ open, onClose }: CreateListModalProps)
     return () => window.removeEventListener('keydown', handleKey);
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (!open) {
+      setCreated(false);
+      setSubmitting(false);
+      setError('');
+    }
+  }, [open]);
+
   if (!open) return null;
 
-  const handleSubmit = (e: FormEvent) => {
+  // Calls the real createList (useLists.ts, already used by Lists.tsx)
+  // instead of the previous fake setTimeout success flow - nothing was
+  // ever saved before. The chosen emoji still can't persist: `lists`
+  // has no emoji column, and adding one is a schema change (out of
+  // scope this phase) - the picker stays as a same-session-only choice,
+  // same documented gap as before, not made worse.
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || submitting) return;
 
-    // TODO (Future): create a real list - call useActiveList()'s
-    // createList(name) (already implemented in useLists.ts) instead of
-    // this timeout. The chosen emoji has nowhere to persist yet - lists
-    // has no emoji column - so it would need either a schema change or
-    // a separate client-side mapping until one exists. Mock only for
-    // now: nothing is saved, closing this modal loses the input.
+    setSubmitting(true);
+    setError('');
+    const result = await createList(name.trim());
+    setSubmitting(false);
+
+    if (!result) {
+      setError('שגיאה ביצירת הרשימה. נסה שוב.');
+      return;
+    }
+
     setCreated(true);
     setTimeout(() => {
       setCreated(false);
@@ -113,11 +135,18 @@ export default function CreateListModal({ open, onClose }: CreateListModalProps)
               </div>
             </div>
 
+            {error && (
+              <p className="text-sm font-medium text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="w-full bg-blue-500 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-600 transition-all active:scale-[0.99]"
+              disabled={submitting}
+              className="w-full bg-blue-500 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-600 transition-all active:scale-[0.99] disabled:opacity-60"
             >
-              צור רשימה
+              {submitting ? 'יוצר...' : 'צור רשימה'}
             </button>
           </form>
         )}

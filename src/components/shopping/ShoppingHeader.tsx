@@ -2,7 +2,6 @@
 import type { Member } from './MemberAvatar';
 import MemberAvatarGroup from './MemberAvatarGroup';
 import InviteMemberButton from './InviteMemberButton';
-import PresenceIndicator from '../presence/PresenceIndicator';
 
 interface ShoppingHeaderProps {
   title: string;
@@ -15,6 +14,11 @@ interface ShoppingHeaderProps {
   onInvite: () => void;
 }
 
+// Was showing a fabricated "X מחוברים" (X online) claim derived from
+// mock presence data. Real list_members has no online/offline signal
+// without a Supabase Presence channel (out of scope this phase - no
+// realtime changes), so this now shows the real total member count
+// instead of a presence claim we can't back up.
 export default function ShoppingHeader({
   title,
   subtitle,
@@ -25,8 +29,6 @@ export default function ShoppingHeader({
   members,
   onInvite,
 }: ShoppingHeaderProps) {
-  const onlineCount = members.filter((m) => m.online).length;
-
   return (
     <div className="bg-white rounded-2xl shadow-sm p-4">
       <div className="flex items-center justify-between gap-3">
@@ -42,9 +44,8 @@ export default function ShoppingHeader({
         </span>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-violet-600 font-medium flex items-center gap-1 bg-violet-50 rounded-full px-2.5 py-1">
-            <PresenceIndicator online={onlineCount > 0} />
-            {onlineCount} מחוברים
+          <span className="text-xs text-violet-600 font-medium bg-violet-50 rounded-full px-2.5 py-1">
+            {members.length} בני משפחה
           </span>
           <InviteMemberButton onClick={onInvite} variant="ghost" />
         </div>

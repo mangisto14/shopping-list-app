@@ -1,60 +1,36 @@
 // src/components/presence/PresencePanel.tsx
-import PresenceIndicator from './PresenceIndicator';
+import type { Member } from '../shopping/MemberAvatar';
 
-// Strict superset of Member (src/components/shopping/MemberAvatar.tsx):
-// same id/name/avatar/online fields plus lastSeen. That means this data
-// can be passed anywhere a Member is expected (ShoppingHeader,
-// MemberAvatarGroup, MemberCard) with zero changes to those components.
-export interface PresenceUser {
-  id: string;
-  name: string;
-  avatar: string;
-  online: boolean;
-  lastSeen?: string | null;
+interface PresencePanelProps {
+  members: Member[];
 }
 
-// TODO (Future): Supabase Presence API - subscribe to a per-list
-// presence channel (supabase.channel(...).on('presence', {event: ...},
-// ...)) and derive this array from real synced state.
-// TODO (Future): realtime online tracking - react to join/leave events
-// as they happen instead of a static snapshot.
-// TODO (Future): away status - see PresenceIndicator's TODO.
-// TODO (Future): typing indicators - who's currently editing an item.
-// TODO (Future): current editor - highlight which item is being edited
-// by whom, for live conflict awareness.
-//
-// This is now the single canonical mock member/presence array - it
-// replaces MembersPanel.tsx's former mockMembers export rather than
-// living alongside it.
-export const mockPresence: PresenceUser[] = [
-  { id: '1', name: 'יוסף', avatar: '👨', online: true, lastSeen: null },
-  { id: '2', name: 'שרה', avatar: '👩', online: true, lastSeen: null },
-  { id: '3', name: 'נועה', avatar: '👧', online: false, lastSeen: '5 דקות' },
-];
-
-export default function PresencePanel() {
-  const onlineCount = mockPresence.filter((u) => u.online).length;
-
+// Was mock-only ("who's online now"), fed by a hardcoded mockPresence
+// array. Real list_members data has no online/offline signal without a
+// Supabase Presence channel (out of scope this phase - no realtime
+// changes), so this now shows real membership only, not presence.
+export default function PresencePanel({ members }: PresencePanelProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700">מי מחובר עכשיו</h2>
-        <span className="text-xs font-medium text-emerald-600">
-          {onlineCount} מתוך {mockPresence.length} מחוברים
-        </span>
+        <h2 className="text-sm font-semibold text-gray-700">מי ברשימה</h2>
+        <span className="text-xs font-medium text-gray-500">{members.length} בני משפחה</span>
       </div>
 
-      <ul className="space-y-2">
-        {mockPresence.map((user) => (
-          <li key={user.id} className="flex items-center gap-2 text-sm">
-            <PresenceIndicator online={user.online} />
-            <span className="font-medium text-gray-800">{user.name}</span>
-            {!user.online && user.lastSeen && (
-              <span className="text-xs text-gray-400">לפני {user.lastSeen}</span>
-            )}
-          </li>
-        ))}
-      </ul>
+      {members.length === 0 ? (
+        <p className="text-xs text-gray-400 text-center py-2">אין עדיין חברים ברשימה זו</p>
+      ) : (
+        <ul className="space-y-2">
+          {members.map((member) => (
+            <li key={member.id} className="flex items-center gap-2 text-sm">
+              <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                {member.avatar}
+              </span>
+              <span className="font-medium text-gray-800">{member.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
