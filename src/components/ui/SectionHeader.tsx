@@ -22,7 +22,7 @@ function SectionHeader({ title, subtitle, actionLabel, onAction }: SectionHeader
       {actionLabel && onAction && (
         <button
           onClick={onAction}
-          className="flex-shrink-0 text-xs font-semibold text-violet-600 hover:text-violet-700 transition-colors"
+          className="flex-shrink-0 text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
         >
           {actionLabel}
         </button>

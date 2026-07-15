@@ -60,7 +60,7 @@ export default function CreateListModal({ open, onClose }: CreateListModalProps)
       {created ? (
         <div className="text-center py-6">
           <p className="text-3xl mb-2">✓</p>
-          <p className="text-emerald-600 font-medium">הרשימה נוצרה בהצלחה</p>
+          <p className="text-green-600 font-medium">הרשימה נוצרה בהצלחה</p>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">

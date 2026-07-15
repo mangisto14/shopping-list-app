@@ -17,9 +17,7 @@ interface MemberAvatarProps {
   avatar: string;
   online?: boolean;
   size?: 'sm' | 'md' | 'lg';
-  // Small corner tag (e.g. "★" for owner) - optional, off by default so
-  // existing call sites that render their own separate role badge
-  // (MemberCard) are unaffected.
+  // Small corner tag (e.g. "★" for owner) - optional, off by default.
   roleBadge?: string;
 }
 
@@ -44,13 +42,13 @@ function MemberAvatar({ name, avatar, online, size = 'md', roleBadge }: MemberAv
       {online !== undefined && (
         <span
           className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white transition-colors ${
-            online ? 'bg-emerald-500' : 'bg-gray-300'
+            online ? 'bg-green-500' : 'bg-gray-300'
           }`}
         />
       )}
 
       {roleBadge && (
-        <span className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-violet-500 text-white text-[9px] flex items-center justify-center border-2 border-white">
+        <span className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] flex items-center justify-center border-2 border-white">
           {roleBadge}
         </span>
       )}

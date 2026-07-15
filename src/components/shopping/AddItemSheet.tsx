@@ -1,6 +1,6 @@
 // src/components/shopping/AddItemSheet.tsx
 import type { Category } from '../../hooks/useCategories';
-import { getCategoryStyle } from './CategorySection';
+import { getCategoryStyle } from '../../theme/categoryStyles';
 import BottomSheet from '../ui/BottomSheet';
 import CategoryChip from '../ui/CategoryChip';
 
@@ -49,7 +49,7 @@ export default function AddItemSheet({
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
         placeholder={placeholder}
-        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-violet-400"
+        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
       />
 
       <div className="flex flex-wrap gap-2">
@@ -57,7 +57,7 @@ export default function AddItemSheet({
           <button
             key={suggestion}
             onClick={() => onChange(suggestion)}
-            className="flex-shrink-0 rounded-full bg-gray-100 text-gray-600 text-sm font-medium px-3 py-1.5 hover:bg-violet-100 hover:text-violet-700 transition-all"
+            className="flex-shrink-0 rounded-full bg-gray-100 text-gray-600 text-sm font-medium px-3 py-1.5 hover:bg-blue-50 hover:text-blue-700 transition-all"
           >
             + {suggestion}
           </button>
@@ -93,7 +93,7 @@ export default function AddItemSheet({
 
       <button
         onClick={onSubmit}
-        className="w-full bg-gradient-to-br from-violet-500 to-purple-600 text-white rounded-xl py-3 text-sm font-semibold hover:shadow-md active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+        className="w-full bg-blue-600 text-white rounded-xl py-3 text-sm font-semibold shadow-[0_6px_14px_rgba(37,99,235,0.35)] hover:shadow-md active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
       >
         <span className="text-lg leading-none">+</span>
         {submitLabel}

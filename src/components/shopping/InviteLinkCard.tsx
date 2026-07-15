@@ -44,24 +44,25 @@ export default function InviteLinkCard() {
   };
 
   return (
-    <div className="border border-gray-100 rounded-xl p-3 space-y-2">
-      <p className="text-xs font-semibold text-gray-500">קישור הזמנה</p>
+    <div className="bg-white rounded-[18px] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_20px_rgba(15,23,42,0.05)] p-4 flex flex-col gap-2.5">
+      <p className="text-sm font-bold text-gray-900">קישור הזמנה למשפחה</p>
       <div className="flex items-center gap-2">
         <p
           dir="ltr"
-          className="flex-1 min-w-0 truncate text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 font-mono"
+          className="flex-1 min-w-0 truncate text-[13px] text-gray-500 bg-slate-50 border border-gray-100 rounded-xl px-3 py-2.5 font-mono"
         >
           {MOCK_INVITE_LINK.url}
         </p>
         <button
           onClick={handleCopy}
-          className={`flex-shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-all active:scale-95 ${
-            copied ? 'bg-emerald-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600'
+          className={`flex-shrink-0 rounded-xl px-4 h-[42px] text-sm font-bold transition-all active:scale-95 ${
+            copied ? 'bg-green-500 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
           }`}
         >
-          {copied ? '✓ הועתק' : 'העתק קישור'}
+          {copied ? '✓ הועתק' : 'העתקה'}
         </button>
       </div>
+      <p className="text-xs font-medium text-gray-400">כל מי שמצטרף עם הקישור רואה את כל הרשימות</p>
     </div>
   );
 }

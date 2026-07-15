@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useActiveList } from '../ActiveListContext';
 import { useItems } from '../hooks/useItems';
 import { useCategories } from '../hooks/useCategories';
-import { getCategoryStyle } from '../components/shopping/CategorySection';
+import { getCategoryStyle } from '../theme/categoryStyles';
 import EmptyListsState from '../components/lists/EmptyListsState';
 import AppCard from '../components/ui/AppCard';
 import SectionHeader from '../components/ui/SectionHeader';
@@ -70,11 +70,11 @@ export default function Statistics() {
           <p className="text-xs text-gray-500 mt-1">סה״כ פריטים</p>
         </AppCard>
         <AppCard className="text-center">
-          <p className="text-2xl font-bold text-emerald-600">{completedItems}</p>
+          <p className="text-2xl font-bold text-green-600">{completedItems}</p>
           <p className="text-xs text-gray-500 mt-1">נקנו</p>
         </AppCard>
         <AppCard className="text-center">
-          <p className="text-2xl font-bold text-violet-600">{remainingItems}</p>
+          <p className="text-2xl font-bold text-blue-600">{remainingItems}</p>
           <p className="text-xs text-gray-500 mt-1">נותרו</p>
         </AppCard>
       </div>

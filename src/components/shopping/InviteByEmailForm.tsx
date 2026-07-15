@@ -59,7 +59,7 @@ export default function InviteByEmailForm({ onInvite }: InviteByEmailFormProps) 
           type="submit"
           disabled={status === 'sending'}
           className={`flex-shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-all active:scale-95 disabled:opacity-60 ${
-            status === 'sent' ? 'bg-emerald-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600'
+            status === 'sent' ? 'bg-green-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'
           }`}
         >
           {status === 'sending' ? 'שולח...' : status === 'sent' ? '✓ נוסף/ה לרשימה' : 'הוסף/י'}

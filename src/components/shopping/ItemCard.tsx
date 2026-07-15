@@ -1,18 +1,20 @@
 // src/components/shopping/ItemCard.tsx
 import { useState } from 'react';
 import type { Item } from '../../hooks/useItems';
+import { getCategoryStyle } from '../../theme/categoryStyles';
 
 interface ItemCardProps {
   item: Item;
-  categoryIcon?: string;
+  categoryName?: string;
   onToggle: () => void;
   onDelete: () => void;
   onRename: (id: string, newName: string) => void;
 }
 
-export default function ItemCard({ item, categoryIcon, onToggle, onDelete, onRename }: ItemCardProps) {
+export default function ItemCard({ item, categoryName, onToggle, onDelete, onRename }: ItemCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(item.name);
+  const style = getCategoryStyle(categoryName);
 
   const handleSave = () => {
     const trimmed = name.trim();
@@ -26,10 +28,24 @@ export default function ItemCard({ item, categoryIcon, onToggle, onDelete, onRen
 
   return (
     <li
-      className={`flex items-center gap-3 bg-white rounded-2xl shadow-sm px-4 py-3.5 transition-all hover:shadow-md ${
+      className={`flex items-center gap-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_6px_16px_rgba(15,23,42,0.05)] px-3.5 py-3 transition-all hover:shadow-md ${
         item.is_done ? 'opacity-60' : ''
       }`}
     >
+      <button
+        onClick={onToggle}
+        aria-label="toggle item"
+        className={`flex-shrink-0 w-[26px] h-[26px] rounded-full border-2 flex items-center justify-center transition-all ${
+          item.is_done ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-green-400'
+        }`}
+      >
+        {item.is_done && (
+          <svg width="12" height="10" viewBox="0 0 12 10" fill="none" aria-hidden="true">
+            <path d="M1.5 5.5L4.5 8.5L10.5 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </button>
+
       <div className="flex-1 min-w-0">
         {isEditing ? (
           <input
@@ -38,24 +54,31 @@ export default function ItemCard({ item, categoryIcon, onToggle, onDelete, onRen
             onChange={(e) => setName(e.target.value)}
             onBlur={handleSave}
             onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-            className="w-full border-b border-violet-400 bg-transparent focus:outline-none text-sm font-semibold"
+            className="w-full border-b border-blue-400 bg-transparent focus:outline-none text-[16.5px] font-semibold"
           />
         ) : (
           <button
             onClick={() => setIsEditing(true)}
-            className={`w-full text-right truncate text-sm font-semibold ${
-              item.is_done ? 'line-through text-gray-400' : 'text-gray-800'
+            className={`w-full text-right truncate text-[16.5px] font-semibold ${
+              item.is_done ? 'line-through text-gray-400' : 'text-gray-900'
             }`}
           >
             {item.name}
           </button>
         )}
-        {/* TODO: replace with real attribution once item rows carry a
-            joinable profile (display name/avatar). There is no
-            profiles table yet - same limitation already flagged on the
-            Lists page's member panel. Placeholder only, not wired to
-            item.user_id. */}
-        <p className="text-xs text-gray-400 mt-0.5">נוסף ע״י חבר{categoryIcon ? ` · ${categoryIcon}` : ''}</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          {categoryName && (
+            <span className={`text-[11.5px] font-bold ${style.bg} ${style.text} rounded-full px-2.5 py-0.5`}>
+              {categoryName}
+            </span>
+          )}
+          {/* TODO: replace with real attribution once item rows carry a
+              joinable profile (display name/avatar). There is no
+              profiles table yet - same limitation already flagged on the
+              Lists page's member panel. Placeholder only, not wired to
+              item.user_id. */}
+          <span className="text-[13px] font-medium text-gray-500">נוסף ע״י חבר</span>
+        </div>
       </div>
 
       <button
@@ -64,18 +87,6 @@ export default function ItemCard({ item, categoryIcon, onToggle, onDelete, onRen
         className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors px-1 text-sm"
       >
         🗑️
-      </button>
-
-      <button
-        onClick={onToggle}
-        aria-label="toggle item"
-        className={`flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
-          item.is_done
-            ? 'bg-emerald-500 border-emerald-500 text-white'
-            : 'border-gray-300 hover:border-emerald-400'
-        }`}
-      >
-        {item.is_done && <span className="text-sm leading-none">✓</span>}
       </button>
     </li>
   );

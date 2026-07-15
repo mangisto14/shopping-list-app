@@ -4,6 +4,7 @@ import { supabase } from '../supabase/client';
 import { useAuth } from '../hooks/useAuth';
 import EmptyState from '../components/ui/EmptyState';
 import { PageSkeleton } from '../components/ui/Skeleton';
+import HistorySessionCard from '../components/history/HistorySessionCard';
 
 export default function HistoryPage() {
   const { user } = useAuth();
@@ -31,28 +32,33 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto p-4">
-      <h2 className="text-xl font-bold mb-4">היסטוריית קניות</h2>
+    <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4 pb-28 space-y-4">
+      <div className="flex flex-col gap-0.5 px-1">
+        <h1 className="text-[28px] font-extrabold text-gray-900 tracking-tight">היסטוריה</h1>
+        {history.length > 0 && (
+          <p className="text-[13px] font-medium text-gray-500">{history.length} קניות</p>
+        )}
+      </div>
 
       {history.length === 0 ? (
-        <EmptyState icon="🧾" title="אין היסטוריית קניות עדיין" description="רשימות שתשלים/י יופיעו כאן" />
+        <EmptyState icon="🧾" title="אין היסטוריית קניות עדיין" description="רשימות שתשלים/י יופיעו כאן" size="lg" />
       ) : (
-        <ul className="space-y-4">
-          {history.map((entry) => (
-            <li key={entry.id} className="bg-gray-100 p-4 rounded shadow">
-              <p className="text-sm text-gray-600 mb-2">
-                {new Date(entry.created_at).toLocaleString()}
-              </p>
-              <ul className="list-disc list-inside">
-                {entry.items.map((item: any) => (
-                  <li key={item.id} className={item.is_done ? 'line-through text-gray-500' : ''}>
-                    {item.name}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
+        <div className="relative">
+          <div className="absolute top-2.5 bottom-0 right-[33px] w-0.5 bg-gray-200" aria-hidden="true" />
+          <div className="flex flex-col gap-3.5 relative">
+            {history.map((entry) => (
+              <HistorySessionCard
+                key={entry.id}
+                date={new Date(entry.created_at).toLocaleString('he-IL', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                })}
+                items={entry.items ?? []}
+              />
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

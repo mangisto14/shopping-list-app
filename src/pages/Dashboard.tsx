@@ -6,7 +6,7 @@ import { shoppingLabels } from '../i18n/shoppingList';
 import { useActiveList } from '../ActiveListContext';
 import { useItems } from '../hooks/useItems';
 import { useCategories } from '../hooks/useCategories';
-import { getCategoryStyle } from '../components/shopping/CategorySection';
+import { getCategoryStyle } from '../theme/categoryStyles';
 import EmptyListsState from '../components/lists/EmptyListsState';
 import AppCard from '../components/ui/AppCard';
 import SectionHeader from '../components/ui/SectionHeader';
@@ -73,7 +73,7 @@ export default function Dashboard() {
             {'  •  '}
             <span className="font-semibold text-gray-700">{completedItems}</span> {t.completedCount}
           </span>
-          <span className="font-semibold text-violet-600">
+          <span className="font-semibold text-blue-600">
             {percentage}% {t.progressLabel}
           </span>
         </div>

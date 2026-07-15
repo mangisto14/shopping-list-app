@@ -11,10 +11,9 @@ interface AppCardProps {
 }
 
 // Replaces the `bg-white rounded-xl/2xl shadow-sm p-*` shell repeated
-// across Dashboard/Statistics/FamilyMembers/ShoppingList and their
-// sub-panels (ProgressBar, MembersPanel, PresencePanel, item rows,
-// etc). Pure presentational wrapper - memoized since its output only
-// ever depends on its own props.
+// across Dashboard/Statistics and their sub-panels (ProgressBar, item
+// rows, etc). Pure presentational wrapper - memoized since its output
+// only ever depends on its own props.
 function AppCard({ children, padding = 'base', rounded = '2xl', className = '', onClick }: AppCardProps) {
   const roundedClass = rounded === '2xl' ? 'rounded-2xl' : 'rounded-xl';
   const Tag = onClick ? 'button' : 'div';
