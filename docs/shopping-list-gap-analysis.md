@@ -175,3 +175,43 @@ Checked explicitly: hamburger-menu/language-select order, ListSwitcher chevron p
 All of the above are Tailwind className / inline-style / copy-string edits only — no hook, query, auth, realtime, or routing code is touched.
 
 I'll hold here per your "do not modify code yet" instruction — say the word and I'll implement Critical + Major first, then Minor.
+
+---
+
+## Round 2 addendum — new reference mockups (device-frame screenshots)
+
+These 3 panels ("2a" main list, "2b" add-item bottom sheet, "2c" invite modal) are richer than the original generic design export — they show real "My List" content, and cover 2 screens (add-item sheet, invite modal) the original design never included at all. Where they conflict with round-1 findings, they supersede them (more specific > generic).
+
+### Correction to §1.3 (FAB position)
+Round 1 found the FAB should move from centered to a fixed `left: 20px`, based on the generic design frame's absolute positioning. **This round-2 mockup shows the FAB centered** in the "My List" screen — matching what the app already does. I'm **retracting §1.3 and §4.5** (FAB position/size fixes) — the current centered FAB and ~64px size appear to already be correct per this more specific reference. No change needed there.
+
+### New finding — BottomSheet close button is on the wrong side (Major)
+- **Current**: `BottomSheet.tsx` renders the close (✕) button as the *first* flex child, which places it at the **rightmost** position under `dir="rtl"` — confirmed in your original screenshots (✕ sits at the right edge, title at the left).
+- **Expected**: Both new mockups (2b, 2c) show the opposite: ✕ at the **left** edge, title right-aligned and reading from the right (the natural RTL title position). This affects every modal built on `BottomSheet` — `AddItemSheet`, `InviteMemberModal`, `CreateListModal`, `CategorySheet`.
+- **Files**: `src/components/ui/BottomSheet.tsx` (swap the two children's order, or reorder with `flex-row-reverse`).
+
+### New finding — swipe-to-reveal hint text (Major, blocked pending a decision)
+- Panel 2a shows a hint row above the list: "← החלק שמאלה לשיוך או מחיקה" (swipe left to assign or delete), plus the first item card mid-swipe with a red reveal. This is the same swipe gesture round 1 already flagged as a data/scope gap (§ "skipped" decision from the prior session) — now shown twice across two rounds of reference material, so it reads as an intentional requirement, not incidental.
+- I won't add the hint text without the actual gesture behind it — a hint advertising a swipe that doesn't do anything would be worse than no hint. Implementing it for real (touch handlers + reveal transform, no new dependency needed) is a genuine, if self-contained, addition. Flagging this as a decision point rather than silently building or silently skipping it — see question below.
+- **Files** (if built): `src/components/shopping/ItemCard.tsx` (or a new wrapper) — pure interaction/CSS, no hook or query changes.
+- The "assign to member" swipe action specifically still has no backing data (no assignee field on `items` — same gap documented in round 1); the "delete" action already exists as a tap target and could become the swipe action too.
+
+### New finding — quantity stepper appears twice, still blocked by schema (confirmed, no action)
+- Both 2a (quick-add card) and 2b (add-item sheet) show a `+ N −` quantity stepper. `items` has no `quantity` column and I'm not adding one — that would be a Supabase schema/hook change, explicitly out of scope for this pass. Documenting again so this doesn't read as an oversight: it's a deliberate, schema-blocked omission.
+
+### New finding — category taxonomy in the mockup includes names not in the current style map (Minor, needs a data check)
+- Panel 2b's category grid shows "פארם וטיפוח" (pharmacy/care) and "שתיה" (drinks) — neither matches an entry in `src/theme/categoryStyles.ts` (which has "משקאות" for drinks, and nothing for pharmacy/care). If these are real category names in your Supabase `categories` table, they'll currently fall back to the generic gray/cart-icon style instead of getting a real color+icon. I can't confirm without seeing the actual seeded category rows — worth a quick check before I extend the style map, so I add the *actual* category names rather than guessing again.
+
+### Everything else in 2a/2b/2c
+Header layout, quick-add card structure, category chip row, item card anatomy (checkbox/name/tag/attribution), suggestion chips, invite-link card, email-invite row, and bottom nav all match what round 1 already found — no new deltas there.
+
+---
+
+### Before I implement anything
+
+Two things need your call, since both cross from "restyle" into "new interaction":
+
+1. **Swipe-to-reveal gesture** — build it for real (touch handlers, CSS transform, delete as the swipe action; "assign" stays out since there's no data for it), or leave item delete as the current static button and skip the hint text too?
+2. **Category taxonomy** — do you want me to extend `categoryStyles.ts` based on your actual Supabase `categories` rows (if you can tell me the real names), or proceed with best-guess additions for "פארם וטיפוח"/"שתיה" now and adjust later?
+
+Everything else in both rounds (Critical + Major layout/spacing/typography/component fixes, the BottomSheet close-button swap) is a plain restyle with no open questions — say the word and I'll implement those regardless of how the two questions above land.
