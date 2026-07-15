@@ -37,10 +37,10 @@ const authenticatedRoutes = (
 return (
   <BrowserRouter>
     <div className="min-h-screen flex flex-col items-center">
-      <div className="w-full max-w-md p-4 flex justify-between">
+      <div className="w-full max-w-md px-4 pt-3 pb-1 flex justify-between items-center">
         {user && <HeaderMenu />}
 
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end">
           <label htmlFor="language-select" className="sr-only">
             Language / שפה
           </label>
@@ -48,7 +48,7 @@ return (
             id="language-select"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="border rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border rounded p-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="he">עברית</option>
             <option value="en">English</option>
@@ -56,7 +56,7 @@ return (
         </div>
       </div>
 
-      <div className={`w-full max-w-md p-4 ${user ? 'pb-28' : ''}`}>
+      <div className={`w-full max-w-md px-4 ${user ? 'pb-28' : 'py-4'}`}>
         {user ? (
           <ActiveListProvider>{authenticatedRoutes}</ActiveListProvider>
         ) : (

@@ -44,6 +44,11 @@ export default function ShoppingList() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showCreateListModal, setShowCreateListModal] = useState(false);
   const [completedOpen, setCompletedOpen] = useState(true);
+  // Quick-add "quantity": no `quantity` column on `items` (schema change,
+  // out of scope), so this controls how many copies of the same item
+  // addItem() below inserts - a UI-only interpretation of the stepper,
+  // not a new persisted field.
+  const [addQuantity, setAddQuantity] = useState(1);
   // Category chosen for the item currently being created. Deliberately
   // separate from `selectedCategory` (the page filter) - they used to
   // share one state, which meant picking a category in the add-item
@@ -111,14 +116,19 @@ export default function ShoppingList() {
       return;
     }
 
-    const success = await addItemToList(input, effectiveAddCategoryId || null);
-    if (!success) {
-      setAddItemError('שגיאה בהוספת הפריט. נסה שוב.');
-      return;
+    // "Quantity" adds this many separate rows via the same, unmodified
+    // addItem call - see addQuantity's declaration above.
+    for (let i = 0; i < addQuantity; i++) {
+      const success = await addItemToList(input, effectiveAddCategoryId || null);
+      if (!success) {
+        setAddItemError('שגיאה בהוספת הפריט. נסה שוב.');
+        return;
+      }
     }
 
     setInput('');
     setAddItemError('');
+    setAddQuantity(1);
     setShowAddForm(false);
   };
 
@@ -147,7 +157,7 @@ export default function ShoppingList() {
   }
 
   return (
-    <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4 pb-28 space-y-4">
+    <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-2 pb-28">
       <ListSwitcher
         lists={displayLists}
         activeList={activeList}
@@ -155,26 +165,32 @@ export default function ShoppingList() {
         onCreateNew={() => setShowCreateListModal(true)}
       />
 
-      <ShoppingHeader
-        title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
-        subtitle={t.subtitle}
-        totalItems={totalItems}
-        members={members}
-        onInvite={() => setShowInviteModal(true)}
-      />
+      <div className="mt-2">
+        <ShoppingHeader
+          title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
+          subtitle={t.subtitle}
+          totalItems={totalItems}
+          members={members}
+          onInvite={() => setShowInviteModal(true)}
+        />
+      </div>
 
-      <QuickAddBar
-        value={input}
-        onChange={setInput}
-        onSubmit={addItem}
-        placeholder={t.placeholder}
-        categories={categories}
-        selectedCategoryLabel={effectiveAddCategoryName}
-        onOpenCategoryPicker={openAddForm}
-      />
+      <div className="mt-1.5">
+        <QuickAddBar
+          value={input}
+          onChange={setInput}
+          onSubmit={addItem}
+          placeholder={t.placeholder}
+          categories={categories}
+          selectedCategoryLabel={effectiveAddCategoryName}
+          onOpenCategoryPicker={openAddForm}
+          quantity={addQuantity}
+          onQuantityChange={setAddQuantity}
+        />
+      </div>
 
       {categories.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 mt-3">
           <CategoryChip
             icon=""
             label={t.allCategories}
@@ -198,9 +214,11 @@ export default function ShoppingList() {
       )}
 
       {visibleItems.length === 0 ? (
-        <EmptyState icon="🛒" title={t.empty} size="lg" />
+        <div className="mt-3">
+          <EmptyState icon="🛒" title={t.empty} size="lg" />
+        </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 mt-2">
           <p className="text-[13px] font-bold text-gray-500 tracking-wide px-1">
             {t.toBuyLabel} · {toBuyItems.length}
           </p>

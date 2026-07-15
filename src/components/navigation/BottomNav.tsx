@@ -35,7 +35,7 @@ export default function BottomNav() {
     <nav
       aria-label="ניווט ראשי"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]"
+      className="fixed bottom-0 inset-x-0 z-40 bg-white/92 backdrop-blur-md border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]"
     >
       <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto grid grid-cols-4 h-16">
         {TABS.map(({ to, label, Icon, ActiveIcon, end }) => (

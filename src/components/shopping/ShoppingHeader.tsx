@@ -22,10 +22,10 @@ export default function ShoppingHeader({ title, subtitle, totalItems, members, o
       <div className="flex flex-col gap-0.5 min-w-0">
         <h1 className="text-[28px] font-extrabold text-gray-900 tracking-tight truncate">{title}</h1>
         <div className="flex items-center gap-1.5">
-          <span className="w-[7px] h-[7px] rounded-full bg-green-500 flex-shrink-0" />
           <span className="text-[13px] font-medium text-gray-500 truncate">
             {subtitle} · {members.length} מחוברים · {totalItems} פריטים
           </span>
+          <span className="w-[7px] h-[7px] rounded-full bg-green-500 flex-shrink-0" />
         </div>
       </div>
 

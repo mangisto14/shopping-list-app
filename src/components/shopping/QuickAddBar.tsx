@@ -10,6 +10,8 @@ interface QuickAddBarProps {
   categories: Category[];
   selectedCategoryLabel: string;
   onOpenCategoryPicker: () => void;
+  quantity: number;
+  onQuantityChange: (quantity: number) => void;
 }
 
 // Docked "quick add" card pinned under the header, matching the Claude
@@ -19,6 +21,11 @@ interface QuickAddBarProps {
 // Tapping the category chip opens the full AddItemSheet (via
 // onOpenCategoryPicker) so category selection/quick suggestions still
 // live in one place.
+//
+// The quantity stepper has no backing `quantity` column on `items` (no
+// schema change in scope here) - ShoppingList.tsx interprets it as "add
+// this many copies," calling the existing addItem() hook function that
+// many times. Purely a UI/orchestration choice, not a hook/query change.
 export default function QuickAddBar({
   value,
   onChange,
@@ -27,6 +34,8 @@ export default function QuickAddBar({
   categories,
   selectedCategoryLabel,
   onOpenCategoryPicker,
+  quantity,
+  onQuantityChange,
 }: QuickAddBarProps) {
   const style = getCategoryStyle(selectedCategoryLabel);
 
@@ -39,29 +48,51 @@ export default function QuickAddBar({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
           placeholder={placeholder}
-          className="flex-1 min-w-0 h-11 bg-slate-50 border border-gray-100 rounded-xl px-3.5 text-[15px] font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="flex-1 min-w-0 h-11 bg-slate-50 border border-gray-100 rounded-[14px] px-3.5 text-[15px] font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
         <button
           onClick={onSubmit}
           aria-label="add item"
-          className="flex-shrink-0 w-11 h-11 rounded-xl bg-blue-600 text-white shadow-[0_6px_14px_rgba(37,99,235,0.35)] active:scale-95 transition-all flex items-center justify-center text-2xl font-light"
+          className="flex-shrink-0 w-11 h-11 rounded-[14px] bg-blue-600 text-white shadow-[0_6px_14px_rgba(37,99,235,0.35)] active:scale-95 transition-all flex items-center justify-center text-2xl font-light"
         >
           +
         </button>
       </div>
 
-      {categories.length > 0 && (
-        <button
-          onClick={onOpenCategoryPicker}
-          className={`self-start h-9 rounded-full ${style.bg} ${style.text} text-sm font-semibold flex items-center gap-1.5 px-3.5`}
-        >
-          <span>{style.icon}</span>
-          <span>{selectedCategoryLabel}</span>
-          <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
-            <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      )}
+      <div className="flex items-center justify-between gap-2">
+        {categories.length > 0 ? (
+          <button
+            onClick={onOpenCategoryPicker}
+            className={`h-9 rounded-full ${style.bg} ${style.text} text-sm font-semibold flex items-center gap-1.5 px-3.5`}
+          >
+            <span>{style.icon}</span>
+            <span>{selectedCategoryLabel}</span>
+            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        ) : (
+          <span />
+        )}
+
+        <div className="flex items-center gap-3.5 h-9 rounded-full bg-slate-50 border border-gray-100 px-2">
+          <button
+            onClick={() => onQuantityChange(Math.max(1, quantity - 1))}
+            aria-label="decrease quantity"
+            className="w-[26px] h-[26px] rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.08)] flex items-center justify-center text-sm font-bold text-gray-500"
+          >
+            −
+          </button>
+          <span className="text-[15px] font-bold text-gray-900 min-w-[14px] text-center">{quantity}</span>
+          <button
+            onClick={() => onQuantityChange(quantity + 1)}
+            aria-label="increase quantity"
+            className="w-[26px] h-[26px] rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.08)] flex items-center justify-center text-sm font-bold text-blue-600"
+          >
+            +
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
