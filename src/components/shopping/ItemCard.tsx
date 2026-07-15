@@ -28,7 +28,7 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
 
   return (
     <li
-      className={`flex items-center gap-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_6px_16px_rgba(15,23,42,0.05)] px-3.5 py-3 transition-all hover:shadow-md ${
+      className={`flex items-center gap-2.5 bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_6px_16px_rgba(15,23,42,0.05)] px-3.5 py-2.5 transition-all hover:shadow-md ${
         item.is_done ? 'opacity-60' : ''
       }`}
     >

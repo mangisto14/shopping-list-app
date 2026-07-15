@@ -1,81 +1,128 @@
-# UI Gap Analysis — Screen 2a (Shopping List Main Screen)
+# UI Gap Analysis — Full Polish Pass (Screens 2a/2b/2c)
 
-Scope: **Screen 2a only** ("My List — רשימה ראשית"). Screens 2b (add-item bottom sheet) and 2c (invite dialog) are explicitly out of scope for this pass.
+This supersedes the screen-scoped `UI_GAP_ANALYSIS.md` from the prior pass (2a-only) — that content is folded in here alongside the new requirements from this round. `docs/shopping-list-gap-analysis.md` and `docs/design-mapping.md` remain as historical record of the first two rounds.
 
-Reference: the round-2 device-frame mockup (panel 2a) — richer/more specific than the original generic Claude Design export, and treated as the authoritative source where the two conflict (see the FAB note below).
-
-This consolidates and supersedes the two prior gap-analysis rounds (`docs/shopping-list-gap-analysis.md`) for everything touching screen 2a specifically.
+No new reference screenshots were attached with this request; findings are grounded in (a) the round-2 device-frame mockups already analyzed in prior turns, and (b) the explicit numeric/behavioral spec given directly in this task (72–75vh sheet height, 24px radius/padding, 250/180/120ms animation timing, etc.) — those are implemented as stated rather than re-derived from pixels.
 
 ---
 
-## 1. Header
+## 1. Header Section
 
-| Finding | Current | Expected | Severity | Files |
+| Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| Double top padding | `App.jsx`'s `p-4` wrapper (16px top) **and** `ShoppingList.tsx`'s own `pt-4` (another 16px) stack to 32px before any content | Single top gap, ~12-16px total | **Critical** | `src/App.jsx`, `src/pages/ShoppingList.tsx` |
-| Stray margin in app chrome | Language-select wrapper has `mb-4` inside a `flex justify-between` row, adding 16px of dead space below the row for no layout reason | No stray margin; the row's own height is enough | **Critical** | `src/App.jsx` |
-| List-selector pill too heavy | `ListSwitcher.tsx` renders a full-weight card (`px-4 py-3`, `shadow-sm`, `border`) — same visual weight as the real header below it | Compact, low-profile pill: smaller text, tighter padding, minimal shadow — present (mockup keeps it) but clearly secondary to the title | **Major** | `src/components/lists/ListSwitcher.tsx` |
-| Title + metadata line | `ShoppingHeader.tsx` already renders large title (28px/800) + small metadata subtitle (13px/500) + avatar group beside the title, in the same left/right arrangement as the mockup | Matches — title right, avatar stack + invite button left, metadata line under title with a status dot | **Not a gap** (verified) | — |
-| Metadata dot position | Dot renders before the subtitle text (rightmost, start of the RTL line) | Mockup shows the dot at the end of the line (leftmost) | **Minor** | `src/components/shopping/ShoppingHeader.tsx` |
+| Residual vertical footprint | Fixed in the prior pass (double padding + stray margin removed, `ListSwitcher` compacted) — one more tightening pass possible: `mt-2` gap between `ListSwitcher`/`ShoppingHeader` | Slightly tighter (`mt-1.5`) | **Minor** | `src/pages/ShoppingList.tsx` |
+| Metadata line alignment | Text-then-dot order (fixed round 2) | Matches | **Not a gap** | — |
+| Avatar sizing | `MemberAvatarGroup` uses `size="sm"` (32px) consistently | Matches design's small header avatar stack | **Not a gap** | — |
+| List-selector height | Compacted to a text-height pill in the prior pass | Matches | **Not a gap** | — |
 
-## 2. Add Item Card
+## 2. Quick Add Card
 
-| Finding | Current | Expected | Severity | Files |
+| Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| Missing quantity selector | `QuickAddBar.tsx` has no quantity control | A `+ / N / −` stepper on the second row, left-aligned | **Major** | `src/components/shopping/QuickAddBar.tsx`, `src/pages/ShoppingList.tsx` |
-| Category chip present, wrong position | Category chip renders alone (`self-start`) on row 2 | Row 2 has stepper on the **left** and category chip on the **right**, same row | **Major** | `src/components/shopping/QuickAddBar.tsx` |
-| Plus button / input layout | `+` button left, input right, both 44px tall — already matches | Matches | **Not a gap** | — |
-| Card radius | `rounded-[18px]` outer, `rounded-xl` (12px) on input/button | Design token is 14px on the inner controls | **Minor** | `src/components/shopping/QuickAddBar.tsx` |
+| Proportions | `+`/input both 44px, card `rounded-[18px]`, inner controls `rounded-[14px]` | Already matches design tokens (verified round 1/2) | **Not a gap** | — |
+| Internal spacing | `p-3` outer, `gap-2.5` row gaps | Consistent | **Not a gap** | — |
 
-**Implementation note on the quantity selector**: `items` has no `quantity` column, and adding one would be a schema/hook change (out of scope — "Do not modify Supabase queries / hooks / business logic"). The stepper is implemented as **local UI state that controls how many times the existing `addItem` function is invoked** — i.e. "quantity 2" adds 2 separate item rows via the same, unmodified `useItems().addItem` call. No new hook, no new query, no schema change — just calling an existing function N times from the page. Documenting this so the interpretation is explicit, not assumed silently.
+No further changes needed here beyond what's already shipped.
 
-## 3. Category Filters
+## 3. Category Filter Chips
 
-| Finding | Current | Expected | Severity | Files |
+| Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| Chip height not fixed | `CategoryChip.tsx` uses `py-1.5` (content-driven height, ~30px) | Fixed 34px height | **Major** | `src/components/ui/CategoryChip.tsx` |
-| Chip padding | `px-3` (12px horizontal) | 14px horizontal | **Major** | `src/components/ui/CategoryChip.tsx` |
-| Chip type | `text-sm font-medium` (14px/500) | 13.5px/600 (semibold) | **Major** | `src/components/ui/CategoryChip.tsx` |
-| Active chip color/shadow | Solid blue-600 + blue shadow — already matches | Matches | **Not a gap** | — |
-| "All categories" label | "כל הקטגוריות" (long) | Mockup shows "כל הקטגוריות" too in this round's panel (differs from round 1's generic design, which had "הכל") — **keeping current label**, retracting round 1's suggested shortening | **Not a gap** (retracted) | — |
+| Chip density / spacing | `gap-2` (8px) between chips in the filter row | Slightly more breathing room per this pass's explicit ask ("too dense") | **Major** | `src/pages/ShoppingList.tsx` |
+| Active chip dominance | Active shadow `0 4px 10px rgba(37,99,235,.3)` | Soften slightly so it doesn't overpower neighboring chips | **Minor** | `src/components/ui/CategoryChip.tsx` |
+| Touch target vs. visual height | Chip height is a fixed 34px (matches the design's explicit token), below the 44px touch guideline the design's own notes mention | Accept the design's 34px as the visual spec (source of truth) — not growing chips past what the reference shows | **Minor** (documented trade-off, not fixed) | — |
 
-## 4. List Items
+## 4. Shopping Item Cards
 
-| Finding | Current | Expected | Severity | Files |
+| Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| Card padding/height | `px-3.5 py-3` (14/12px) | Matches design's `12px 14px` almost exactly | **Not a gap** (verified in round 1) | — |
-| Product title, category badge, "added by" text | All present, styled close to spec | Matches | **Not a gap** | — |
-| Checkbox on the right | Present, 26px, rightmost (first child, RTL) | Matches | **Not a gap** | — |
-| Chevron on left | Not present | A small left-pointing chevron near the card's left edge | **Major** | `src/components/shopping/ItemCard.tsx` |
+| Card vertical padding | `py-3` (12px) | Tighter, `py-2.5` (10px), for higher on-screen density | **Major** | `src/components/shopping/ItemCard.tsx` |
+| Gap between cards | `space-y-2` (8px) | `space-y-1.5` (6px) | **Major** | `src/pages/ShoppingList.tsx` |
+| Typography/badge/checkbox/chevron positioning | Already matches (verified rounds 1–2) | Matches | **Not a gap** | — |
 
-**Implementation note on the chevron**: the mockup shows this chevron alongside a swipe-to-reveal gesture (visible mid-swipe on one item, plus a hint line above the list). This task's scope is styling/layout only, not new interaction behavior, and no functional swipe is being wired up in this pass. The chevron is added as a **static, decorative affordance icon only** — it does not trigger a swipe or reveal anything. The existing delete (trash) button stays as-is alongside it so item deletion isn't lost. If a real swipe gesture is wanted later, that's a separate, interaction-adding task (flagged previously, still open).
+## 5. Completed Items Section
 
-## 5. Floating Action Button
-
-| Finding | Current | Expected | Severity | Files |
+| Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| Horizontal position | Centered (`left-1/2 -translate-x-1/2`) | This round's mockup shows it centered too — **round 1's "move to bottom-left" finding is retracted**, current position is correct | **Not a gap** (confirmed) | — |
-| Size/shadow | 64px, blue-600, layered shadow | Matches the mockup closely enough at this resolution; no measurable delta found | **Not a gap** | — |
+| Visual separation from the to-buy list | Just a spacing gap (`pt-2`), no visual divider | A subtle top border/divider before the "הושלמו" toggle | **Minor** | `src/pages/ShoppingList.tsx` |
+| Collapsed-state affordance | Chevron rotates 180° on collapse — already present | Matches | **Not a gap** | — |
 
-## 6. Bottom Navigation
+## 6. Floating Action Button
 
-| Finding | Current | Expected | Severity | Files |
+| Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| Tab set | רשימה / קטגוריות / משפחה / היסטוריה | Matches (fixed in a prior session) | **Not a gap** | — |
-| Active tab styling | Blue text + solid icon vs. gray outline icon | Matches | **Not a gap** | — |
-| Glass effect | Opaque `bg-white` | Design specifies `rgba(255,255,255,.92)` + `backdrop-filter: blur(16px)` — frosted glass over scrolling content | **Major** (explicitly called out: "match design exactly") | `src/components/navigation/BottomNav.tsx` |
-| Icon/label sizing | 22px icons / 11px labels via `size-6`/`text-xs` — already matches design tokens | Matches | **Not a gap** | — |
+| Position | Centered, clears bottom nav via `calc(4rem + safe-area + 1rem)` | Confirmed correct against round-2 reference; no change | **Not a gap** | — |
+| Animation duration | Uses default Tailwind transition timing (150ms) | 180ms per this pass's explicit spec | **Minor** | `src/components/shopping/FloatingAddButton.tsx` |
+
+## 7. Bottom Navigation
+
+| Issue | Current | Expected | Severity | Files |
+|---|---|---|---|---|
+| Icon size | `size-6` (24px) | Design token is 22px | **Minor** | `src/components/navigation/BottomNav.tsx` |
+| Label size | `text-xs` (12px) | Design token is 11px | **Minor** | `src/components/navigation/BottomNav.tsx` |
+| Glass effect, active state, height | Already correct (prior passes) | Matches | **Not a gap** | — |
+
+## 8. Add Item Bottom Sheet
+
+| Issue | Current | Expected | Severity | Files |
+|---|---|---|---|---|
+| Height | `max-h-[85vh]`, content-driven | 72–75vh, explicitly capped | **Critical** | `src/components/ui/BottomSheet.tsx` |
+| Border radius | `rounded-t-3xl` = 24px (top, mobile) already correct; `sm:rounded-2xl` = 16px (centered variant) is not | 24px everywhere | **Major** | `src/components/ui/BottomSheet.tsx` |
+| Internal padding | `p-5` = 20px | 24px (`p-6`) | **Major** | `src/components/ui/BottomSheet.tsx` |
+| "Cramped" feel / spacing between sections | `space-y-4` (16px) applies uniformly, but header/body/footer aren't structurally separated, so the CTA and category grid crowd the scroll area | Restructure into header / scrollable body / footer regions with breathing room between them | **Critical** | `src/components/ui/BottomSheet.tsx`, `src/components/shopping/AddItemSheet.tsx` |
+| Categories too close together | `gap-2` (8px) in the category grid | `gap-2.5` (10px) | **Major** | `src/components/shopping/AddItemSheet.tsx` |
+| CTA too close to edges | Inherits the sheet's 20px padding | Inherits the new 24px padding once §8's padding fix lands | **Major** (resolved by the padding fix) | `src/components/ui/BottomSheet.tsx` |
+
+## 9. Keyboard-Safe Behavior (Critical)
+
+| Issue | Current | Expected | Severity | Files |
+|---|---|---|---|---|
+| Sheet sizing on keyboard open | Sheet height is driven by `vh` units / `max-h-[85vh]`, which mobile browsers don't reliably shrink when the on-screen keyboard opens — content (input, categories, CTA) can end up hidden behind the keyboard | Track `window.visualViewport` height live and cap the sheet's height to a fraction of the **actual visible** viewport, not the layout viewport, so the sheet always fits above the keyboard | **Critical** | `src/components/ui/BottomSheet.tsx` |
+
+Implementation approach: `visualViewport.resize`/`scroll` listeners update a height value in state, applied as an inline `maxHeight` style; falls back to the static `75vh` when `visualViewport` isn't available (older browsers) — progressive enhancement, no behavior regression where the API is missing.
+
+## 10. Sticky CTA Area
+
+| Issue | Current | Expected | Severity | Files |
+|---|---|---|---|---|
+| CTA position | Renders as the last item inside the same scrollable region as the rest of the form | Pinned outside the scrollable area (structural footer, not CSS `sticky` inside a variable-height flex context — more reliable across browsers), full width, safe-area bottom padding | **Critical** | `src/components/ui/BottomSheet.tsx` (new `footer` slot), `src/components/shopping/AddItemSheet.tsx` |
+
+## 11. Category Selection Area
+
+| Issue | Current | Expected | Severity | Files |
+|---|---|---|---|---|
+| Row cap before scrolling | `max-h-28` (112px) ≈ 3 rows | ~2 rows (`max-h-20`, 80px) before internal scroll | **Minor** | `src/components/shopping/AddItemSheet.tsx` |
+| Selected-state styling | Preserved (uses the same `CategoryChip` active state) | Matches | **Not a gap** | — |
+
+## 12. Invite Members Dialog
+
+| Issue | Current | Expected | Severity | Files |
+|---|---|---|---|---|
+| Dimensions/padding/radius | Inherits whatever `BottomSheet` provides | Once §8's structural fix lands (24px radius/padding), this dialog inherits it automatically — no dialog-specific code changes needed | **Not a gap** (resolved via shared component) | — |
+| Typography, inputs, buttons, divider | Already matched in the prior pass (title copy, link icon, unified label weight) | Matches | **Not a gap** | — |
+
+## 13. RTL Polish
+
+Audited every file touched in this pass plus the shared `BottomSheet`. No new directional bugs found — DOM ordering (title/close, stepper/chip, checkbox/content/actions) was already verified correct for `dir="rtl"` in the prior two rounds, and the structural `BottomSheet` refactor in this pass doesn't reorder any of that, only adds layout wrapper divs.
+
+## 14. Mobile UX Polish
+
+Covered by §§3–11 (density, spacing, sticky CTA, keyboard safety). No separate changes beyond those.
+
+## 15. Animations
+
+| Element | Current | Expected | Files |
+|---|---|---|---|
+| Bottom sheet open/close | `duration-200` (200ms) | `duration-[250ms]` | `src/components/ui/BottomSheet.tsx` |
+| FAB | default (150ms) | `duration-[180ms]` | `src/components/shopping/FloatingAddButton.tsx` |
+| Chip selection | default (150ms) | `duration-[120ms]` | `src/components/ui/CategoryChip.tsx` |
 
 ---
 
-## Summary — what's implemented this pass
+## Summary
 
-**Critical**: header double-padding, stray margin.
-**Major**: ListSwitcher compactness, quantity stepper, category-chip sizing, section-gap tightening, item-card chevron, bottom-nav glass effect.
-**Minor** (implemented opportunistically, low risk): quick-add card inner radius, subtitle dot position.
-**Retracted from round 1** (this round's more specific mockup overrides them): FAB position (already correct, centered), "all categories" label shortening (this mockup keeps the long label).
+**Critical**: sheet height cap (72–75vh), header/body/footer structural split, keyboard-safe `visualViewport` sizing, sticky CTA footer.
+**Major**: sheet radius/padding to 24px, category-grid gap, category-filter-row gap, item-card density (padding + inter-card gap).
+**Minor**: completed-section divider, animation-duration explicit values, bottom-nav icon/label size, active-chip shadow softening, category-grid row cap.
 
-**Explicitly not implemented** (out of scope for this pass, matching the task's restriction to Screen 2a and to styling/layout only):
-- Real swipe-to-reveal gesture (chevron is decorative only).
-- Any Supabase schema, hook, query, auth, realtime, or routing change.
-- Screens 2b and 2c.
+All changes are Tailwind classes, inline styles, and one `visualViewport` event-listener effect — no Supabase, hook, query, auth, realtime, routing, or data-model code is touched anywhere in this pass.

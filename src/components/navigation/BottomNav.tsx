@@ -44,7 +44,7 @@ export default function BottomNav() {
             to={to}
             end={end}
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset ${
+              `flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset ${
                 isActive ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
               }`
             }
@@ -53,7 +53,7 @@ export default function BottomNav() {
               const TabIcon = isActive ? ActiveIcon : Icon;
               return (
                 <>
-                  <TabIcon className="size-6" aria-hidden="true" />
+                  <TabIcon className="w-[22px] h-[22px]" aria-hidden="true" />
                   <span aria-current={isActive ? 'page' : undefined}>{label}</span>
                 </>
               );

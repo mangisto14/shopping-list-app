@@ -165,7 +165,7 @@ export default function ShoppingList() {
         onCreateNew={() => setShowCreateListModal(true)}
       />
 
-      <div className="mt-2">
+      <div className="mt-1.5">
         <ShoppingHeader
           title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
           subtitle={t.subtitle}
@@ -190,7 +190,7 @@ export default function ShoppingList() {
       </div>
 
       {categories.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 mt-3">
+        <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-1 px-1 mt-3">
           <CategoryChip
             icon=""
             label={t.allCategories}
@@ -222,7 +222,7 @@ export default function ShoppingList() {
           <p className="text-[13px] font-bold text-gray-500 tracking-wide px-1">
             {t.toBuyLabel} · {toBuyItems.length}
           </p>
-          <ul className="space-y-2">
+          <ul className="space-y-1.5">
             {toBuyItems.map((item) => (
               <ItemCard
                 key={item.id}
@@ -237,6 +237,7 @@ export default function ShoppingList() {
 
           {doneItems.length > 0 && (
             <>
+              <div className="border-t border-gray-100 mt-1" />
               <button
                 onClick={() => setCompletedOpen((o) => !o)}
                 className="w-full flex items-center justify-between px-1 pt-2 pb-0.5"

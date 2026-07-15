@@ -46,7 +46,20 @@ export default function AddItemSheet({
   errorMessage,
 }: AddItemSheetProps) {
   return (
-    <BottomSheet open={open} onClose={onClose} title={title}>
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={title}
+      footer={
+        <button
+          onClick={onSubmit}
+          className="w-full bg-blue-600 text-white rounded-xl py-3 text-sm font-semibold shadow-[0_6px_14px_rgba(37,99,235,0.35)] hover:shadow-md active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
+        >
+          <span className="text-lg leading-none">+</span>
+          {submitLabel}
+        </button>
+      }
+    >
       <div className="flex items-center gap-2.5">
         <QuantityStepper quantity={quantity} onChange={onQuantityChange} />
         <input
@@ -75,7 +88,7 @@ export default function AddItemSheet({
       {categories.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-gray-500 mb-1.5">{categoryLabel}</p>
-          <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto">
+          <div className="flex flex-wrap gap-2.5 max-h-20 overflow-y-auto">
             {categories.map((cat) => {
               const style = getCategoryStyle(cat.name);
               return (
@@ -98,14 +111,6 @@ export default function AddItemSheet({
           {errorMessage}
         </p>
       )}
-
-      <button
-        onClick={onSubmit}
-        className="w-full bg-blue-600 text-white rounded-xl py-3 text-sm font-semibold shadow-[0_6px_14px_rgba(37,99,235,0.35)] hover:shadow-md active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
-      >
-        <span className="text-lg leading-none">+</span>
-        {submitLabel}
-      </button>
     </BottomSheet>
   );
 }
