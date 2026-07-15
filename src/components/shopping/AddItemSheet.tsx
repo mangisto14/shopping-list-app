@@ -88,7 +88,7 @@ export default function AddItemSheet({
       {categories.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-gray-500 mb-1.5">{categoryLabel}</p>
-          <div className="flex flex-wrap gap-2.5 max-h-20 overflow-y-auto">
+          <div className="flex flex-wrap gap-2.5 max-h-20 overflow-y-auto scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
             {categories.map((cat) => {
               const style = getCategoryStyle(cat.name);
               return (

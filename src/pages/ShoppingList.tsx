@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
 import { useActiveList } from '../ActiveListContext';
-import { useItems } from '../hooks/useItems';
+import { useItems, type Item } from '../hooks/useItems';
 import { useCategories } from '../hooks/useCategories';
 import { useMembers } from '../hooks/useMembers';
 import type { Member } from '../components/ui/MemberAvatar';
@@ -44,6 +44,14 @@ export default function ShoppingList() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showCreateListModal, setShowCreateListModal] = useState(false);
   const [completedOpen, setCompletedOpen] = useState(true);
+  // Which section (to-buy/completed) a just-toggled item should keep
+  // rendering in for a short window after the tap, so the checkbox's
+  // fill/fade transition has time to play before the item jumps to the
+  // other list - avoids an abrupt re-render on every toggle. The real
+  // toggleItem() mutation still fires immediately; this only delays
+  // which section the item is *rendered* in, not when the data changes.
+  const [pendingMoves, setPendingMoves] = useState<Map<string, 'todo' | 'done'>>(new Map());
+  const TOGGLE_TRANSITION_MS = 200;
   // Quick-add "quantity": no `quantity` column on `items` (schema change,
   // out of scope), so this controls how many copies of the same item
   // addItem() below inserts - a UI-only interpretation of the stepper,
@@ -137,8 +145,23 @@ export default function ShoppingList() {
     [items, selectedCategory]
   );
 
-  const toBuyItems = useMemo(() => visibleItems.filter((i) => !i.is_done), [visibleItems]);
-  const doneItems = useMemo(() => visibleItems.filter((i) => i.is_done), [visibleItems]);
+  const sectionFor = (item: Item): 'todo' | 'done' => pendingMoves.get(item.id) ?? (item.is_done ? 'done' : 'todo');
+  const toBuyItems = useMemo(() => visibleItems.filter((i) => sectionFor(i) === 'todo'), [visibleItems, pendingMoves]);
+  const doneItems = useMemo(() => visibleItems.filter((i) => sectionFor(i) === 'done'), [visibleItems, pendingMoves]);
+
+  const handleToggle = (item: Item) => {
+    const currentSection: 'todo' | 'done' = item.is_done ? 'done' : 'todo';
+    setPendingMoves((prev) => new Map(prev).set(item.id, currentSection));
+    toggleItem(item);
+    window.setTimeout(() => {
+      setPendingMoves((prev) => {
+        if (!prev.has(item.id)) return prev;
+        const next = new Map(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }, TOGGLE_TRANSITION_MS);
+  };
 
   const categoryNameFor = (categoryId: string | null) => categories.find((c) => c.id === categoryId)?.name;
 
@@ -190,7 +213,10 @@ export default function ShoppingList() {
       </div>
 
       {categories.length > 0 && (
-        <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-1 px-1 mt-3">
+        <div
+          className="flex gap-2.5 overflow-x-auto scroll-smooth pb-1 -mx-1 px-1 mt-3"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           <CategoryChip
             icon=""
             label={t.allCategories}
@@ -215,7 +241,14 @@ export default function ShoppingList() {
 
       {visibleItems.length === 0 ? (
         <div className="mt-3">
-          <EmptyState icon="🛒" title={t.empty} size="lg" />
+          <EmptyState
+            icon="🛒"
+            title={t.empty}
+            description={t.emptyDescription}
+            actionLabel={t.addItemTitle}
+            onAction={openAddForm}
+            size="lg"
+          />
         </div>
       ) : (
         <div className="flex flex-col gap-2 mt-2">
@@ -228,7 +261,7 @@ export default function ShoppingList() {
                 key={item.id}
                 item={item}
                 categoryName={categoryNameFor(item.category_id)}
-                onToggle={() => toggleItem(item)}
+                onToggle={() => handleToggle(item)}
                 onDelete={() => deleteItem(item.id)}
                 onRename={renameItem}
               />
@@ -263,7 +296,7 @@ export default function ShoppingList() {
                       key={item.id}
                       item={item}
                       categoryName={categoryNameFor(item.category_id)}
-                      onToggle={() => toggleItem(item)}
+                      onToggle={() => handleToggle(item)}
                       onDelete={() => deleteItem(item.id)}
                       onRename={renameItem}
                     />

@@ -1,128 +1,98 @@
-# UI Gap Analysis — Full Polish Pass (Screens 2a/2b/2c)
+# UI Gap Analysis — Pixel-Parity Pass 4 (Swipe Gestures, Micro-interactions)
 
-This supersedes the screen-scoped `UI_GAP_ANALYSIS.md` from the prior pass (2a-only) — that content is folded in here alongside the new requirements from this round. `docs/shopping-list-gap-analysis.md` and `docs/design-mapping.md` remain as historical record of the first two rounds.
+Supersedes the prior `UI_GAP_ANALYSIS.md` (15-section pass). No new reference screenshots were attached with this request; findings combine (a) the round-2 device-frame mockups analyzed in earlier turns, (b) the explicit numeric/behavioral spec given directly in this task, and (c) direct source review of every file this pass touches or audits.
 
-No new reference screenshots were attached with this request; findings are grounded in (a) the round-2 device-frame mockups already analyzed in prior turns, and (b) the explicit numeric/behavioral spec given directly in this task (72–75vh sheet height, 24px radius/padding, 250/180/120ms animation timing, etc.) — those are implemented as stated rather than re-derived from pixels.
+Sections 1–3, 9–15 were implemented in the prior two passes and are **re-verified intact** below rather than re-implemented. Sections 5, 6, 16, 17, 18 are **new** in this round.
 
 ---
 
-## 1. Header Section
+## 1–3. Header, Quick Add Card, Category Filter Chips
+
+Re-verified against current source: double-padding removed, `ListSwitcher` compacted, chip sizing (34px/14px/13.5px-600) and gap (10px) in place, active-chip shadow softened. **No regressions, no further changes** — except:
 
 | Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| Residual vertical footprint | Fixed in the prior pass (double padding + stray margin removed, `ListSwitcher` compacted) — one more tightening pass possible: `mt-2` gap between `ListSwitcher`/`ShoppingHeader` | Slightly tighter (`mt-1.5`) | **Minor** | `src/pages/ShoppingList.tsx` |
-| Metadata line alignment | Text-then-dot order (fixed round 2) | Matches | **Not a gap** | — |
-| Avatar sizing | `MemberAvatarGroup` uses `size="sm"` (32px) consistently | Matches design's small header avatar stack | **Not a gap** | — |
-| List-selector height | Compacted to a text-height pill in the prior pass | Matches | **Not a gap** | — |
-
-## 2. Quick Add Card
-
-| Issue | Current | Expected | Severity | Files |
-|---|---|---|---|---|
-| Proportions | `+`/input both 44px, card `rounded-[18px]`, inner controls `rounded-[14px]` | Already matches design tokens (verified round 1/2) | **Not a gap** | — |
-| Internal spacing | `p-3` outer, `gap-2.5` row gaps | Consistent | **Not a gap** | — |
-
-No further changes needed here beyond what's already shipped.
-
-## 3. Category Filter Chips
-
-| Issue | Current | Expected | Severity | Files |
-|---|---|---|---|---|
-| Chip density / spacing | `gap-2` (8px) between chips in the filter row | Slightly more breathing room per this pass's explicit ask ("too dense") | **Major** | `src/pages/ShoppingList.tsx` |
-| Active chip dominance | Active shadow `0 4px 10px rgba(37,99,235,.3)` | Soften slightly so it doesn't overpower neighboring chips | **Minor** | `src/components/ui/CategoryChip.tsx` |
-| Touch target vs. visual height | Chip height is a fixed 34px (matches the design's explicit token), below the 44px touch guideline the design's own notes mention | Accept the design's 34px as the visual spec (source of truth) — not growing chips past what the reference shows | **Minor** (documented trade-off, not fixed) | — |
+| Chip row scroll feel | Plain `overflow-x-auto`, no momentum-scroll hint on iOS | `-webkit-overflow-scrolling: touch` + `scroll-smooth` for a native-feeling swipe-scroll | **Minor** | `src/pages/ShoppingList.tsx`, `src/components/shopping/AddItemSheet.tsx` |
 
 ## 4. Shopping Item Cards
 
-| Issue | Current | Expected | Severity | Files |
-|---|---|---|---|---|
-| Card vertical padding | `py-3` (12px) | Tighter, `py-2.5` (10px), for higher on-screen density | **Major** | `src/components/shopping/ItemCard.tsx` |
-| Gap between cards | `space-y-2` (8px) | `space-y-1.5` (6px) | **Major** | `src/pages/ShoppingList.tsx` |
-| Typography/badge/checkbox/chevron positioning | Already matches (verified rounds 1–2) | Matches | **Not a gap** | — |
+Density already tightened in pass 3 (`py-2.5`, `gap-1.5` between cards). Typography/badge/checkbox positions verified correct. Target "6–8 visible items per screen" is a direct consequence of the density work already done — no further padding changes; the structural change this pass makes (removing the trash button, §5) also removes a flex child, buying back a little more horizontal room for the name/badge.
 
-## 5. Completed Items Section
+## 5. Remove Delete Button (Critical — new)
 
 | Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| Visual separation from the to-buy list | Just a spacing gap (`pt-2`), no visual divider | A subtle top border/divider before the "הושלמו" toggle | **Minor** | `src/pages/ShoppingList.tsx` |
-| Collapsed-state affordance | Chevron rotates 180° on collapse — already present | Matches | **Not a gap** | — |
+| Static trash icon | Always-visible 🗑️ button, third flex child in every item row | Removed entirely — delete only reachable via the swipe gesture (§6) | **Critical** | `src/components/shopping/ItemCard.tsx` |
 
-## 6. Floating Action Button
-
-| Issue | Current | Expected | Severity | Files |
-|---|---|---|---|---|
-| Position | Centered, clears bottom nav via `calc(4rem + safe-area + 1rem)` | Confirmed correct against round-2 reference; no change | **Not a gap** | — |
-| Animation duration | Uses default Tailwind transition timing (150ms) | 180ms per this pass's explicit spec | **Minor** | `src/components/shopping/FloatingAddButton.tsx` |
-
-## 7. Bottom Navigation
+## 6. Swipe Gestures (Critical — new)
 
 | Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| Icon size | `size-6` (24px) | Design token is 22px | **Minor** | `src/components/navigation/BottomNav.tsx` |
-| Label size | `text-xs` (12px) | Design token is 11px | **Minor** | `src/components/navigation/BottomNav.tsx` |
-| Glass effect, active state, height | Already correct (prior passes) | Matches | **Not a gap** | — |
+| No swipe interaction | Item rows are static; the left chevron added in pass 2 is decorative only | Real swipe-left gesture: partial swipe reveals a red delete action (tap to confirm); swipe past a larger threshold deletes immediately (the drag itself is the confirmation); release below the reveal threshold snaps back closed | **Critical** | `src/components/shopping/ItemCard.tsx` |
 
-## 8. Add Item Bottom Sheet
+**Implementation**: Pointer Events (`onPointerDown/Move/Up`), not a gesture library — keeps the dependency footprint unchanged. Direction: dragging the finger **left-to-right** (positive screen-space delta) reveals the action on the card's **left** edge, matching the design's mid-swipe row and the "swipe against reading direction reveals trailing actions" convention (RTL reads right-to-left, so the natural reveal gesture mirrors LTR's familiar "swipe left" - it isn't a literal copy of the LTR direction, which would put the reveal on the wrong edge for RTL). A vertical-dominant drag is detected and treated as a page scroll, not a swipe. Exit animation (opacity fade) plays for ~180ms before `onDelete()` fires. `onDelete`/`onToggle`/`onRename` prop contracts are unchanged.
 
-| Issue | Current | Expected | Severity | Files |
-|---|---|---|---|---|
-| Height | `max-h-[85vh]`, content-driven | 72–75vh, explicitly capped | **Critical** | `src/components/ui/BottomSheet.tsx` |
-| Border radius | `rounded-t-3xl` = 24px (top, mobile) already correct; `sm:rounded-2xl` = 16px (centered variant) is not | 24px everywhere | **Major** | `src/components/ui/BottomSheet.tsx` |
-| Internal padding | `p-5` = 20px | 24px (`p-6`) | **Major** | `src/components/ui/BottomSheet.tsx` |
-| "Cramped" feel / spacing between sections | `space-y-4` (16px) applies uniformly, but header/body/footer aren't structurally separated, so the CTA and category grid crowd the scroll area | Restructure into header / scrollable body / footer regions with breathing room between them | **Critical** | `src/components/ui/BottomSheet.tsx`, `src/components/shopping/AddItemSheet.tsx` |
-| Categories too close together | `gap-2` (8px) in the category grid | `gap-2.5` (10px) | **Major** | `src/components/shopping/AddItemSheet.tsx` |
-| CTA too close to edges | Inherits the sheet's 20px padding | Inherits the new 24px padding once §8's padding fix lands | **Major** (resolved by the padding fix) | `src/components/ui/BottomSheet.tsx` |
+**Accessibility trade-off, flagged not hidden**: removing the always-visible delete button (per this task's explicit §5 instruction) means delete has no keyboard/screen-reader path anymore - swipe gestures aren't operable without a pointer. This is a deliberate scope decision from the task, not an oversight; noting it here so it's a visible, documented trade-off rather than a silent regression.
 
-## 9. Keyboard-Safe Behavior (Critical)
+## 7. Completed Items Section
 
 | Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| Sheet sizing on keyboard open | Sheet height is driven by `vh` units / `max-h-[85vh]`, which mobile browsers don't reliably shrink when the on-screen keyboard opens — content (input, categories, CTA) can end up hidden behind the keyboard | Track `window.visualViewport` height live and cap the sheet's height to a fraction of the **actual visible** viewport, not the layout viewport, so the sheet always fits above the keyboard | **Critical** | `src/components/ui/BottomSheet.tsx` |
+| Divider before section | Added in pass 3 | Matches | **Not a gap** | — |
+| Swipe delete on completed rows | `ItemCard` is shared between to-buy and completed lists already | Automatically inherited once §6 lands — no separate code path | **Not a gap** (resolved via shared component) | — |
+| "Restore" action | Checkbox tap already flips `is_done` back to `false` via the existing `onToggle`/`toggleItem` | This already *is* the restore action — no new code needed | **Not a gap** | — |
 
-Implementation approach: `visualViewport.resize`/`scroll` listeners update a height value in state, applied as an inline `maxHeight` style; falls back to the static `75vh` when `visualViewport` isn't available (older browsers) — progressive enhancement, no behavior regression where the API is missing.
+## 8. (renumbered from prior pass — merged into §6/§7 above)
 
-## 10. Sticky CTA Area
+## 9–12. FAB, Bottom Nav, Add Item Sheet (height/radius/padding), Keyboard-Safe Behavior
+
+Re-verified: FAB centered, 180ms transition, safe-area-aware offset math unchanged (no overlap with bottom nav). Bottom nav 22px icons / 11px labels, glass effect intact. `BottomSheet.tsx`'s header/body/footer split, 75vh `visualViewport`-based cap, 24px radius/padding, 250ms transition all confirmed present from pass 3 — **no changes needed**.
+
+## 13. Sticky CTA Area
+
+Already resolved via `BottomSheet`'s `footer` slot (pass 3) — `AddItemSheet`'s submit button renders there, structurally pinned outside the scrollable body. **No changes needed.**
+
+## 14. Category Selection Area
+
+`max-h-20` (≈2 rows) + `gap-2.5` already in place (pass 3). **No changes needed.**
+
+## 15. Invite Members Dialog
+
+Title copy, link icon, unified label weight already done (pass 2); inherits pass 3's shared-sheet radius/padding automatically. **No changes needed.**
+
+## 16. RTL Polish
+
+Re-audited every file touched or read this pass. No new directional bugs. The one new interactive surface (swipe gesture, §6) is direction-agnostic at the pointer-math level and was explicitly checked against the design's left-side reveal (see §6's implementation note) — this is the one place RTL correctness actually mattered for new code this round.
+
+## 17. Empty State (Major — new)
 
 | Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| CTA position | Renders as the last item inside the same scrollable region as the rest of the form | Pinned outside the scrollable area (structural footer, not CSS `sticky` inside a variable-height flex context — more reliable across browsers), full width, safe-area bottom padding | **Critical** | `src/components/ui/BottomSheet.tsx` (new `footer` slot), `src/components/shopping/AddItemSheet.tsx` |
+| No helper text or CTA | `<EmptyState icon="🛒" title={t.empty} size="lg" />` — icon + title only | Add a description line and an action button that opens the add-item sheet | **Major** | `src/pages/ShoppingList.tsx` |
 
-## 11. Category Selection Area
+## 18. Long List Performance (50–100 items)
 
-| Issue | Current | Expected | Severity | Files |
-|---|---|---|---|---|
-| Row cap before scrolling | `max-h-28` (112px) ≈ 3 rows | ~2 rows (`max-h-20`, 80px) before internal scroll | **Minor** | `src/components/shopping/AddItemSheet.tsx` |
-| Selected-state styling | Preserved (uses the same `CategoryChip` active state) | Matches | **Not a gap** | — |
+No virtualization library added — at 50–100 simple flex-row items, React's default reconciliation with stable `key={item.id}` renders and scrolls natively fine on mobile; introducing `react-window`/similar would be a real architectural change (and a new dependency) disproportionate to the actual item counts a household shopping list reaches. Verified conceptually (stable keys, no per-item inline function identity churn beyond what already existed, no layout-thrashing CSS like animated `height: auto`). **Not device-tested** — no Supabase credentials in this sandbox to seed 100 real rows and load-test on an actual phone; flagging this as a manual QA step rather than claiming verified performance.
 
-## 12. Invite Members Dialog
+## 19. Checkbox Interaction (Major — new)
 
 | Issue | Current | Expected | Severity | Files |
 |---|---|---|---|---|
-| Dimensions/padding/radius | Inherits whatever `BottomSheet` provides | Once §8's structural fix lands (24px radius/padding), this dialog inherits it automatically — no dialog-specific code changes needed | **Not a gap** (resolved via shared component) | — |
-| Typography, inputs, buttons, divider | Already matched in the prior pass (title copy, link icon, unified label weight) | Matches | **Not a gap** | — |
+| Instant list-jump on toggle | Toggling `is_done` immediately reclassifies the item into the other section on the very next render — no visible transition | A ~200ms window (within the 150–250ms spec) where the item shows its new checked/faded state in place, *then* moves to the other section, avoiding an abrupt re-render | **Major** | `src/pages/ShoppingList.tsx` |
 
-## 13. RTL Polish
+**Implementation**: local `pendingMoves` state (a `Set` of item ids currently mid-transition) plus a `pendingSection` map capturing which section an item should *stay* rendered in for ~200ms after a toggle, even though the underlying `is_done` (and thus real hook state) has already flipped. `toggleItem()` is still called immediately — this only delays which list section the item visually renders in, not when the mutation happens.
 
-Audited every file touched in this pass plus the shared `BottomSheet`. No new directional bugs found — DOM ordering (title/close, stepper/chip, checkbox/content/actions) was already verified correct for `dir="rtl"` in the prior two rounds, and the structural `BottomSheet` refactor in this pass doesn't reorder any of that, only adds layout wrapper divs.
+## 20. Mobile UX Polish / Animations
 
-## 14. Mobile UX Polish
-
-Covered by §§3–11 (density, spacing, sticky CTA, keyboard safety). No separate changes beyond those.
-
-## 15. Animations
-
-| Element | Current | Expected | Files |
-|---|---|---|---|
-| Bottom sheet open/close | `duration-200` (200ms) | `duration-[250ms]` | `src/components/ui/BottomSheet.tsx` |
-| FAB | default (150ms) | `duration-[180ms]` | `src/components/shopping/FloatingAddButton.tsx` |
-| Chip selection | default (150ms) | `duration-[120ms]` | `src/components/ui/CategoryChip.tsx` |
+Explicit durations from this and prior passes: sheet 250ms, FAB 180ms, chip 120ms (all pass 3), checkbox 200ms (§19, this pass), swipe exit ~180ms (§6, this pass). All use Tailwind's default `ease` (`cubic-bezier(0.4,0,0.2,1)`) — smooth, no linear/jank.
 
 ---
 
 ## Summary
 
-**Critical**: sheet height cap (72–75vh), header/body/footer structural split, keyboard-safe `visualViewport` sizing, sticky CTA footer.
-**Major**: sheet radius/padding to 24px, category-grid gap, category-filter-row gap, item-card density (padding + inter-card gap).
-**Minor**: completed-section divider, animation-duration explicit values, bottom-nav icon/label size, active-chip shadow softening, category-grid row cap.
+**Critical (new this pass)**: remove static delete button, implement real swipe-to-delete.
+**Major (new this pass)**: checkbox-completion transition, richer empty state.
+**Minor (new this pass)**: momentum scroll on chip rows.
+**Re-verified, no regressions**: everything from passes 2–3 (header, quick-add, chips, item density, FAB, bottom nav, sheet height/radius/padding, keyboard safety, sticky CTA, category grid, invite dialog, RTL).
 
-All changes are Tailwind classes, inline styles, and one `visualViewport` event-listener effect — no Supabase, hook, query, auth, realtime, routing, or data-model code is touched anywhere in this pass.
+No Supabase, hook, query, auth, realtime, routing, or data-model code touched — the swipe gesture and checkbox animation are both purely local component state layered on top of the existing, unmodified `onDelete`/`onToggle`/`toggleItem`/`deleteItem` calls.
