@@ -1,5 +1,5 @@
 // src/components/shopping/ItemCard.tsx
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { Item } from '../../hooks/useItems';
 import { getCategoryStyle } from '../../theme/categoryStyles';
 
@@ -36,6 +36,26 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
   const isScrollGesture = useRef(false);
 
   const closeSwipe = () => setTranslateX(0);
+
+  // Bug fix: completed items could sometimes still show the red
+  // swipe-delete background. Root cause: `is_done` can flip without
+  // going through this row's own swipe gesture at all (toggled via the
+  // guarded checkbox after a swipe was left open, or updated by another
+  // device over Realtime while this row happened to be mid-swipe) - in
+  // those cases nothing in the drag handlers ever ran to snap
+  // `translateX` back to 0. ShoppingList.tsx also keeps a just-toggled
+  // item rendered in its *old* section for ~200ms (see its
+  // pendingMoves comment) so the checkbox transition can play before
+  // the row jumps lists - this component instance persists through
+  // that whole window, so any stale swipe offset would otherwise still
+  // be visible right up until the move. Resetting here, keyed on
+  // `is_done`, guarantees the swipe state is cleared the instant
+  // completion status changes, regardless of what triggered it, well
+  // before the item actually moves between sections.
+  useEffect(() => {
+    setTranslateX(0);
+    setDragging(false);
+  }, [item.is_done]);
 
   const handleSave = () => {
     const trimmed = name.trim();

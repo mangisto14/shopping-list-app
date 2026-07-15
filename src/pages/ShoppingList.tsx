@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
@@ -51,6 +51,7 @@ export default function ShoppingList() {
   // toggleItem() mutation still fires immediately; this only delays
   // which section the item is *rendered* in, not when the data changes.
   const [pendingMoves, setPendingMoves] = useState<Map<string, 'todo' | 'done'>>(new Map());
+  const pendingMoveTimeouts = useRef<Map<string, number>>(new Map());
   const TOGGLE_TRANSITION_MS = 200;
   // Quick-add "quantity": no `quantity` column on `items` (schema change,
   // out of scope), so this controls how many copies of the same item
@@ -153,14 +154,25 @@ export default function ShoppingList() {
     const currentSection: 'todo' | 'done' = item.is_done ? 'done' : 'todo';
     setPendingMoves((prev) => new Map(prev).set(item.id, currentSection));
     toggleItem(item);
-    window.setTimeout(() => {
+
+    // Rapid re-toggle guard: if this item is tapped again before its
+    // previous cleanup timer fires, cancel that older timer so it can't
+    // delete the *newer* pendingMoves entry early (which would snap the
+    // item to the wrong section mid-transition instead of respecting
+    // the fresh 200ms window this toggle just started).
+    const existingTimeout = pendingMoveTimeouts.current.get(item.id);
+    if (existingTimeout !== undefined) window.clearTimeout(existingTimeout);
+
+    const timeoutId = window.setTimeout(() => {
       setPendingMoves((prev) => {
         if (!prev.has(item.id)) return prev;
         const next = new Map(prev);
         next.delete(item.id);
         return next;
       });
+      pendingMoveTimeouts.current.delete(item.id);
     }, TOGGLE_TRANSITION_MS);
+    pendingMoveTimeouts.current.set(item.id, timeoutId);
   };
 
   const categoryNameFor = (categoryId: string | null) => categories.find((c) => c.id === categoryId)?.name;
