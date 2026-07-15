@@ -1,5 +1,5 @@
 // src/components/shopping/ItemCard.tsx
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { Item } from '../../hooks/useItems';
 import { getCategoryStyle } from '../../theme/categoryStyles';
 
@@ -21,6 +21,9 @@ const DELETE_THRESHOLD_PX = 180;
 const MAX_DRAG_PX = 220;
 const DELETE_ANIMATION_MS = 180;
 
+const CARD_SHAPE =
+  'bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_6px_16px_rgba(15,23,42,0.05)] px-3.5 py-2.5';
+
 export default function ItemCard({ item, categoryName, onToggle, onDelete, onRename }: ItemCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(item.name);
@@ -36,26 +39,6 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
   const isScrollGesture = useRef(false);
 
   const closeSwipe = () => setTranslateX(0);
-
-  // Bug fix: completed items could sometimes still show the red
-  // swipe-delete background. Root cause: `is_done` can flip without
-  // going through this row's own swipe gesture at all (toggled via the
-  // guarded checkbox after a swipe was left open, or updated by another
-  // device over Realtime while this row happened to be mid-swipe) - in
-  // those cases nothing in the drag handlers ever ran to snap
-  // `translateX` back to 0. ShoppingList.tsx also keeps a just-toggled
-  // item rendered in its *old* section for ~200ms (see its
-  // pendingMoves comment) so the checkbox transition can play before
-  // the row jumps lists - this component instance persists through
-  // that whole window, so any stale swipe offset would otherwise still
-  // be visible right up until the move. Resetting here, keyed on
-  // `is_done`, guarantees the swipe state is cleared the instant
-  // completion status changes, regardless of what triggered it, well
-  // before the item actually moves between sections.
-  useEffect(() => {
-    setTranslateX(0);
-    setDragging(false);
-  }, [item.is_done]);
 
   const handleSave = () => {
     const trimmed = name.trim();
@@ -152,10 +135,66 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
     action();
   };
 
+  // Completed items: a deliberately separate render path with no swipe
+  // machinery mounted at all - not just visually suppressed. Solid,
+  // fully opaque card background; only the text/badge elements are
+  // muted. (An earlier fix tried keeping the one shared swipeable row
+  // for both states and just resetting its drag offset on completion -
+  // insufficient, because the real bug was `opacity-60` on the whole
+  // card making its own solid-white background translucent, letting the
+  // always-present red delete layer underneath bleed through even at
+  // rest. Not rendering that layer at all for completed items removes
+  // the possibility entirely, and restores per-element muting instead
+  // of a blanket container opacity.)
+  if (item.is_done) {
+    return (
+      <li className={`flex items-center gap-2.5 ${CARD_SHAPE}`}>
+        <button
+          onClick={onToggle}
+          aria-label="toggle item"
+          className="flex-shrink-0 w-[26px] h-[26px] rounded-full border-2 border-green-500 bg-green-500 text-white flex items-center justify-center transition-all duration-200"
+        >
+          <svg width="12" height="10" viewBox="0 0 12 10" fill="none" aria-hidden="true">
+            <path d="M1.5 5.5L4.5 8.5L10.5 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        <div className="flex-1 min-w-0">
+          {isEditing ? (
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={handleSave}
+              onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+              className="w-full border-b border-blue-400 bg-transparent focus:outline-none text-[16.5px] font-semibold"
+            />
+          ) : (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="w-full text-right truncate text-[16.5px] font-semibold text-gray-400 line-through opacity-70"
+            >
+              {item.name}
+            </button>
+          )}
+          <div className="flex items-center gap-2 mt-0.5 opacity-70">
+            {categoryName && (
+              <span className={`text-[11.5px] font-bold ${style.bg} ${style.text} rounded-full px-2.5 py-0.5`}>
+                {categoryName}
+              </span>
+            )}
+            <span className="text-[13px] font-medium text-gray-500">נוסף ע״י חבר</span>
+          </div>
+        </div>
+      </li>
+    );
+  }
+
   return (
     <li className={`relative overflow-hidden rounded-2xl transition-opacity duration-[180ms] ${isDeleting ? 'opacity-0' : ''}`}>
       {/* Delete action, fixed at the left edge, revealed as the card
-          above it slides right. */}
+          above it slides right. Only ever mounted for active items -
+          see the `item.is_done` branch above. */}
       <div
         className="absolute inset-y-0 left-0 flex items-center justify-center bg-red-500 rounded-2xl"
         style={{ width: MAX_DRAG_PX }}
@@ -188,23 +227,13 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
           transition: dragging ? 'none' : 'transform 180ms ease-out',
           touchAction: 'pan-y',
         }}
-        className={`relative flex items-center gap-2.5 bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_6px_16px_rgba(15,23,42,0.05)] px-3.5 py-2.5 ${
-          item.is_done ? 'opacity-60' : ''
-        }`}
+        className={`relative flex items-center gap-2.5 ${CARD_SHAPE}`}
       >
         <button
           onClick={() => guardTap(onToggle)}
           aria-label="toggle item"
-          className={`flex-shrink-0 w-[26px] h-[26px] rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
-            item.is_done ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-green-400'
-          }`}
-        >
-          {item.is_done && (
-            <svg width="12" height="10" viewBox="0 0 12 10" fill="none" aria-hidden="true">
-              <path d="M1.5 5.5L4.5 8.5L10.5 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
+          className="flex-shrink-0 w-[26px] h-[26px] rounded-full border-2 border-gray-300 hover:border-green-400 flex items-center justify-center transition-all duration-200"
+        />
 
         <div className="flex-1 min-w-0">
           {isEditing ? (
@@ -219,9 +248,7 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
           ) : (
             <button
               onClick={() => guardTap(() => setIsEditing(true))}
-              className={`w-full text-right truncate text-[16.5px] font-semibold ${
-                item.is_done ? 'line-through text-gray-400' : 'text-gray-900'
-              }`}
+              className="w-full text-right truncate text-[16.5px] font-semibold text-gray-900"
             >
               {item.name}
             </button>
