@@ -54,6 +54,7 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
         }`}
       >
         <div className="flex items-center justify-between">
+          {title ? <h2 className="text-lg font-bold text-gray-800">{title}</h2> : <span />}
           <button
             onClick={onClose}
             aria-label="close"
@@ -61,7 +62,6 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
           >
             ✕
           </button>
-          {title && <h2 className="text-lg font-bold text-gray-800">{title}</h2>}
         </div>
 
         {children}

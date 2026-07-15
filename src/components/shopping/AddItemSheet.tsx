@@ -3,6 +3,7 @@ import type { Category } from '../../hooks/useCategories';
 import { getCategoryStyle } from '../../theme/categoryStyles';
 import BottomSheet from '../ui/BottomSheet';
 import CategoryChip from '../ui/CategoryChip';
+import QuantityStepper from '../ui/QuantityStepper';
 
 // Static suggestion words for the quick-add chips. Purely presentational
 // shortcuts that prefill the existing `value`/`onChange` input state -
@@ -22,6 +23,8 @@ interface AddItemSheetProps {
   categoryLabel: string;
   selectedCategory: string;
   onSelectCategory: (id: string) => void;
+  quantity: number;
+  onQuantityChange: (quantity: number) => void;
   errorMessage?: string;
 }
 
@@ -38,19 +41,24 @@ export default function AddItemSheet({
   categoryLabel,
   selectedCategory,
   onSelectCategory,
+  quantity,
+  onQuantityChange,
   errorMessage,
 }: AddItemSheetProps) {
   return (
     <BottomSheet open={open} onClose={onClose} title={title}>
-      <input
-        type="text"
-        autoFocus
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
-        placeholder={placeholder}
-        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
-      />
+      <div className="flex items-center gap-2.5">
+        <QuantityStepper quantity={quantity} onChange={onQuantityChange} />
+        <input
+          type="text"
+          autoFocus
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
+          placeholder={placeholder}
+          className="flex-1 min-w-0 border border-gray-200 rounded-xl px-4 py-3 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
+      </div>
 
       <div className="flex flex-wrap gap-2">
         {QUICK_ADD_SUGGESTIONS.map((suggestion) => (
@@ -59,7 +67,7 @@ export default function AddItemSheet({
             onClick={() => onChange(suggestion)}
             className="flex-shrink-0 rounded-full bg-gray-100 text-gray-600 text-sm font-medium px-3 py-1.5 hover:bg-blue-50 hover:text-blue-700 transition-all"
           >
-            + {suggestion}
+            {suggestion} +
           </button>
         ))}
       </div>

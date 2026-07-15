@@ -290,6 +290,8 @@ export default function ShoppingList() {
           setAddItemCategory(id);
           setAddItemError('');
         }}
+        quantity={addQuantity}
+        onQuantityChange={setAddQuantity}
         errorMessage={addItemError}
       />
 
