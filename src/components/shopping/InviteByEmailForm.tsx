@@ -41,7 +41,7 @@ export default function InviteByEmailForm({ onInvite }: InviteByEmailFormProps) 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-2">
-      <p className="text-xs font-semibold text-gray-500">הזמנה באימייל</p>
+      <p className="text-sm font-bold text-gray-900">הזמנה באימייל</p>
       <div className="flex items-center gap-2">
         <input
           type="email"

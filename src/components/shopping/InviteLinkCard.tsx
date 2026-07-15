@@ -45,7 +45,10 @@ export default function InviteLinkCard() {
 
   return (
     <div className="bg-white rounded-[18px] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_20px_rgba(15,23,42,0.05)] p-4 flex flex-col gap-2.5">
-      <p className="text-sm font-bold text-gray-900">קישור הזמנה למשפחה</p>
+      <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+        <span>קישור הזמנה למשפחה</span>
+        <span aria-hidden="true">🔗</span>
+      </p>
       <div className="flex items-center gap-2">
         <p
           dir="ltr"
