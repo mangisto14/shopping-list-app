@@ -20,18 +20,24 @@ const HEIGHT_FRACTION = 0.75; // 72-75vh target from the design spec
 // dialog on larger screens; safe-area padding for iPhone Safari's home
 // indicator.
 //
-// Keyboard-safe sizing: mobile browsers don't shrink the layout
-// viewport (the one `vh` units are based on) when the on-screen
-// keyboard opens, so a plain `max-h-[75vh]` can end up taller than the
-// space actually visible above the keyboard - hiding the input or CTA
-// behind it. `visualViewport` reports the real visible height and
-// updates live as the keyboard opens/closes, so the cap tracks it
-// instead. Falls back to the static 75vh where visualViewport isn't
-// available (older browsers) - progressive enhancement, not a
-// requirement.
+// Keyboard-safe positioning: mobile browsers (iOS Safari in particular)
+// don't shrink the *layout* viewport when the on-screen keyboard opens -
+// the `100%`/`inset-0` a `position: fixed` element is measured against
+// stays full-height, and the keyboard is simply drawn on top of it. A
+// sheet anchored with `items-end` inside a plain `fixed inset-0`
+// container therefore still anchors to the bottom of the *full,
+// unshrunk* page - which is now behind the keyboard - even if the
+// sheet's own height is capped correctly. `visualViewport` reports the
+// actually-visible rectangle and updates live as the keyboard opens/
+// closes/resizes; this repositions the whole overlay to match that
+// rectangle (not just capping the sheet's height inside a stale one),
+// so `items-end` lands the sheet's bottom edge at the top of the
+// keyboard instead of behind it. Falls back to plain `inset-0` where
+// `visualViewport` isn't available (older browsers) - progressive
+// enhancement, not a requirement.
 export default function BottomSheet({ open, onClose, title, children, footer }: BottomSheetProps) {
   const [visible, setVisible] = useState(false);
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [viewport, setViewport] = useState<{ height: number; offsetTop: number } | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -54,7 +60,7 @@ export default function BottomSheet({ open, onClose, title, children, footer }: 
   useEffect(() => {
     if (!open || typeof window === 'undefined' || !window.visualViewport) return;
     const vv = window.visualViewport;
-    const update = () => setViewportHeight(vv.height);
+    const update = () => setViewport({ height: vv.height, offsetTop: vv.offsetTop });
     update();
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
@@ -66,13 +72,14 @@ export default function BottomSheet({ open, onClose, title, children, footer }: 
 
   if (!open) return null;
 
-  const maxHeight = viewportHeight ? `${Math.round(viewportHeight * HEIGHT_FRACTION)}px` : '75vh';
+  const maxHeight = viewport ? `${Math.round(viewport.height * HEIGHT_FRACTION)}px` : '75vh';
 
   return (
     <div
-      className={`fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 transition-opacity duration-[250ms] ${
-        visible ? 'opacity-100' : 'opacity-0'
-      }`}
+      className={`fixed left-0 right-0 z-[60] flex items-end sm:items-center justify-center overflow-hidden bg-black/40 transition-opacity duration-[250ms] ${
+        viewport ? '' : 'top-0 bottom-0'
+      } ${visible ? 'opacity-100' : 'opacity-0'}`}
+      style={viewport ? { top: viewport.offsetTop, height: viewport.height } : undefined}
       onClick={onClose}
     >
       <div
@@ -95,7 +102,7 @@ export default function BottomSheet({ open, onClose, title, children, footer }: 
         </div>
 
         <div
-          className="flex-1 overflow-y-auto px-6 space-y-4 min-h-0"
+          className="flex-1 overflow-y-auto overflow-x-hidden px-6 space-y-4 min-h-0"
           style={!footer ? { paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' } : { paddingBottom: 12 }}
         >
           {children}
