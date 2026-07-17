@@ -41,7 +41,7 @@ export default function InviteByEmailForm({ onInvite }: InviteByEmailFormProps) 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-2">
-      <p className="text-xs font-semibold text-gray-500">הזמנה באימייל</p>
+      <p className="text-sm font-bold text-gray-900">הזמנה באימייל</p>
       <div className="flex items-center gap-2">
         <input
           type="email"
@@ -59,7 +59,7 @@ export default function InviteByEmailForm({ onInvite }: InviteByEmailFormProps) 
           type="submit"
           disabled={status === 'sending'}
           className={`flex-shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-all active:scale-95 disabled:opacity-60 ${
-            status === 'sent' ? 'bg-emerald-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600'
+            status === 'sent' ? 'bg-green-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'
           }`}
         >
           {status === 'sending' ? 'שולח...' : status === 'sent' ? '✓ נוסף/ה לרשימה' : 'הוסף/י'}

@@ -1,25 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
 import { useActiveList } from '../ActiveListContext';
 import { useItems, type Item } from '../hooks/useItems';
-import { useCategories } from '../hooks/useCategories';
+import { useCategories, type Category } from '../hooks/useCategories';
 import { useMembers } from '../hooks/useMembers';
 import type { Member } from '../components/ui/MemberAvatar';
 import ShoppingHeader from '../components/shopping/ShoppingHeader';
-import MembersPanel from '../components/shopping/MembersPanel';
 import InviteMemberModal from '../components/shopping/InviteMemberModal';
-import CategorySection, { getCategoryStyle } from '../components/shopping/CategorySection';
+import { getCategoryStyle } from '../theme/categoryStyles';
+import ItemCard from '../components/shopping/ItemCard';
+import CategorySection from '../components/shopping/CategorySection';
+import QuickAddBar from '../components/shopping/QuickAddBar';
 import FloatingAddButton from '../components/shopping/FloatingAddButton';
 import AddItemSheet from '../components/shopping/AddItemSheet';
 import ListSwitcher from '../components/lists/ListSwitcher';
 import CreateListModal from '../components/lists/CreateListModal';
 import EmptyListsState from '../components/lists/EmptyListsState';
 import type { ListInfo } from '../components/lists/ListCard';
-import PresencePanel from '../components/presence/PresencePanel';
-import AppCard from '../components/ui/AppCard';
-import ProgressBar from '../components/ui/ProgressBar';
 import CategoryChip from '../components/ui/CategoryChip';
 import EmptyState from '../components/ui/EmptyState';
 import { PageSkeleton } from '../components/ui/Skeleton';
@@ -30,17 +29,37 @@ import { PageSkeleton } from '../components/ui/Skeleton';
 // beyond "the Nth list in the array gets the Nth emoji".
 const EMOJI_PALETTE = ['🏠', '🛒', '🛋️', '🚗', '✈️', '🎉', '🏡', '💼'];
 
+interface CategoryGroup {
+  categoryId: string | null; // null = uncategorized
+  categoryName: string | null;
+  items: Item[];
+}
+
+// Groups items by category, preserving the categories list's own order,
+// with any uncategorized items collected into a trailing group. Empty
+// groups are dropped - a category with nothing in this section (e.g. no
+// completed dairy items yet) shouldn't render an empty header.
+function groupByCategory(items: Item[], categories: Category[]): CategoryGroup[] {
+  const byId = new Map<string, CategoryGroup>(
+    categories.map((c) => [c.id, { categoryId: c.id, categoryName: c.name, items: [] }])
+  );
+  const uncategorized: CategoryGroup = { categoryId: null, categoryName: null, items: [] };
+
+  for (const item of items) {
+    const group = (item.category_id && byId.get(item.category_id)) || uncategorized;
+    group.items.push(item);
+  }
+
+  const groups = [...byId.values()].filter((g) => g.items.length > 0);
+  if (uncategorized.items.length > 0) groups.push(uncategorized);
+  return groups;
+}
+
 export default function ShoppingList() {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const t = shoppingLabels[language as 'he' | 'en'];
-  const {
-    lists: realLists,
-    activeList: activeListReal,
-    activeListId,
-    setActiveListId,
-    loading: listsLoading,
-  } = useActiveList();
+  const { lists: realLists, activeListId, setActiveListId, loading: listsLoading } = useActiveList();
 
   const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
   const { categories } = useCategories();
@@ -51,6 +70,33 @@ export default function ShoppingList() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showCreateListModal, setShowCreateListModal] = useState(false);
+  // Collapsed category groups, keyed "todo:<categoryId|none>" /
+  // "done:<categoryId|none>" so the same category can be independently
+  // collapsed in the active vs. completed sections. Default: everything
+  // expanded (nothing in the set).
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  // Which section (to-buy/completed) a just-toggled item should keep
+  // rendering in for a short window after the tap, so the checkbox's
+  // fill/fade transition has time to play before the item jumps to the
+  // other section - avoids an abrupt re-render on every toggle. The real
+  // toggleItem() mutation still fires immediately; this only delays
+  // which section the item is *rendered* in, not when the data changes.
+  const [pendingMoves, setPendingMoves] = useState<Map<string, 'todo' | 'done'>>(new Map());
+  const pendingMoveTimeouts = useRef<Map<string, number>>(new Map());
+  const TOGGLE_TRANSITION_MS = 200;
+  // Quick-add "quantity": no `quantity` column on `items` (schema change,
+  // out of scope), so this controls how many copies of the same item
+  // addItem() below inserts - a UI-only interpretation of the stepper,
+  // not a new persisted field.
+  const [addQuantity, setAddQuantity] = useState(1);
   // Category chosen for the item currently being created. Deliberately
   // separate from `selectedCategory` (the page filter) - they used to
   // share one state, which meant picking a category in the add-item
@@ -61,10 +107,17 @@ export default function ShoppingList() {
   const [addItemCategory, setAddItemCategory] = useState('');
   const [addItemError, setAddItemError] = useState('');
 
+  // The category QuickAddBar/AddItemSheet will submit with: the
+  // explicitly chosen addItemCategory, falling back to the first
+  // available category so the docked quick-add bar always has a valid
+  // selection to show, even before the full sheet has ever been opened.
+  const effectiveAddCategoryId = addItemCategory || categories[0]?.id || '';
+  const effectiveAddCategoryName = categories.find((c) => c.id === effectiveAddCategoryId)?.name ?? '';
+
   // Real membership for the active list via useMembers (list_members +
   // profiles, real email, Realtime-backed) - mapped into the Member
-  // shape ShoppingHeader/PresencePanel/MembersPanel already expect, now
-  // with a real email instead of a truncated user_id.
+  // shape ShoppingHeader already expects, now with a real email instead
+  // of a truncated user_id.
   const members: Member[] = useMemo(
     () =>
       realMembers.map((m) => ({
@@ -95,11 +148,7 @@ export default function ShoppingList() {
 
   const openAddForm = () => {
     setAddItemError('');
-    // Preselect the active page filter if it's a real category; otherwise
-    // default to the first available category. Leaves addItemCategory as
-    // '' when there are no categories at all, which addItem below treats
-    // as "no category required".
-    setAddItemCategory(selectedCategory !== 'all' ? selectedCategory : categories[0]?.id ?? '');
+    setAddItemCategory(effectiveAddCategoryId);
     setShowAddForm(true);
   };
 
@@ -110,19 +159,24 @@ export default function ShoppingList() {
 
   const addItem = async () => {
     if (!input.trim()) return;
-    if (categories.length > 0 && !addItemCategory) {
+    if (categories.length > 0 && !effectiveAddCategoryId) {
       setAddItemError('יש לבחור קטגוריה');
       return;
     }
 
-    const success = await addItemToList(input, addItemCategory || null);
-    if (!success) {
-      setAddItemError('שגיאה בהוספת הפריט. נסה שוב.');
-      return;
+    // "Quantity" adds this many separate rows via the same, unmodified
+    // addItem call - see addQuantity's declaration above.
+    for (let i = 0; i < addQuantity; i++) {
+      const success = await addItemToList(input, effectiveAddCategoryId || null);
+      if (!success) {
+        setAddItemError('שגיאה בהוספת הפריט. נסה שוב.');
+        return;
+      }
     }
 
     setInput('');
     setAddItemError('');
+    setAddQuantity(1);
     setShowAddForm(false);
   };
 
@@ -131,23 +185,39 @@ export default function ShoppingList() {
     [items, selectedCategory]
   );
 
-  const groupedItems = useMemo(() => {
-    const groups: Record<string, Item[]> = {};
+  const sectionFor = (item: Item): 'todo' | 'done' => pendingMoves.get(item.id) ?? (item.is_done ? 'done' : 'todo');
+  const toBuyItems = useMemo(() => visibleItems.filter((i) => sectionFor(i) === 'todo'), [visibleItems, pendingMoves]);
+  const doneItems = useMemo(() => visibleItems.filter((i) => sectionFor(i) === 'done'), [visibleItems, pendingMoves]);
 
-    // יצירת קבוצות לפי category_id
-    visibleItems.forEach((item) => {
-      const catId = item.category_id || 'uncategorized';
-      if (!groups[catId]) groups[catId] = [];
-      groups[catId].push(item);
-    });
+  const toBuyGroups = useMemo(() => groupByCategory(toBuyItems, categories), [toBuyItems, categories]);
+  const doneGroups = useMemo(() => groupByCategory(doneItems, categories), [doneItems, categories]);
 
-    return groups;
-  }, [visibleItems]);
+  const handleToggle = (item: Item) => {
+    const currentSection: 'todo' | 'done' = item.is_done ? 'done' : 'todo';
+    setPendingMoves((prev) => new Map(prev).set(item.id, currentSection));
+    toggleItem(item);
+
+    // Rapid re-toggle guard: if this item is tapped again before its
+    // previous cleanup timer fires, cancel that older timer so it can't
+    // delete the *newer* pendingMoves entry early (which would snap the
+    // item to the wrong section mid-transition instead of respecting
+    // the fresh 200ms window this toggle just started).
+    const existingTimeout = pendingMoveTimeouts.current.get(item.id);
+    if (existingTimeout !== undefined) window.clearTimeout(existingTimeout);
+
+    const timeoutId = window.setTimeout(() => {
+      setPendingMoves((prev) => {
+        if (!prev.has(item.id)) return prev;
+        const next = new Map(prev);
+        next.delete(item.id);
+        return next;
+      });
+      pendingMoveTimeouts.current.delete(item.id);
+    }, TOGGLE_TRANSITION_MS);
+    pendingMoveTimeouts.current.set(item.id, timeoutId);
+  };
 
   const totalItems = items.length;
-  const completedItems = items.filter((i) => i.is_done).length;
-  const remainingItems = totalItems - completedItems;
-  const completionPercentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
   if (listsLoading) {
     return <PageSkeleton />;
@@ -161,86 +231,139 @@ export default function ShoppingList() {
     );
   }
 
+  const renderGroup = (group: CategoryGroup, section: 'todo' | 'done') => {
+    const key = `${section}:${group.categoryId ?? 'none'}`;
+    return (
+      <CategorySection
+        key={key}
+        categoryName={group.categoryName}
+        count={group.items.length}
+        expanded={!collapsedGroups.has(key)}
+        onToggleExpanded={() => toggleGroup(key)}
+      >
+        {group.items.map((item) => (
+          <ItemCard
+            key={item.id}
+            item={item}
+            categoryName={group.categoryName ?? undefined}
+            onToggle={() => handleToggle(item)}
+            onDelete={() => deleteItem(item.id)}
+            onRename={renameItem}
+          />
+        ))}
+      </CategorySection>
+    );
+  };
+
   return (
-    <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4 pb-28 space-y-4">
-      <ListSwitcher
-        lists={displayLists}
-        activeList={activeList}
-        onSelect={(id) => setActiveListId(id)}
-        onCreateNew={() => setShowCreateListModal(true)}
-      />
+    <div
+      className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 flex flex-col"
+      style={{ height: 'calc(100dvh - 3rem)' }}
+    >
+      {/* Fixed top region: list switcher, header, quick-add, category
+          filters. None of this scrolls - only the item list below does
+          (see the flex-1 overflow-y-auto container). `calc(100dvh -
+          3rem)` on the outer wrapper accounts for App.jsx's own h-12
+          chrome row above this page, so this page's total height plus
+          that row equals exactly the viewport height - no outer/page-
+          level scroll competing with the inner list scroll. */}
+      <div className="flex-shrink-0 pt-2">
+        <ListSwitcher
+          lists={displayLists}
+          activeList={activeList}
+          onSelect={(id) => setActiveListId(id)}
+          onCreateNew={() => setShowCreateListModal(true)}
+        />
 
-      <ShoppingHeader
-        title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
-        subtitle={t.subtitle}
-        totalItems={totalItems}
-        completedItems={completedItems}
-        itemsLabel={t.itemsCount}
-        completedLabel={t.completedCount}
-        members={members}
-        onInvite={() => setShowInviteModal(true)}
-      />
-
-      <AppCard>
-        <ProgressBar percentage={completionPercentage} />
-        <div className="flex items-center justify-between mt-2.5 text-sm font-medium text-gray-500">
-          <span>
-            {remainingItems} {t.remainingLabel}
-          </span>
-          <span className="font-semibold text-violet-600">
-            {completionPercentage}% {t.progressLabel}
-          </span>
-        </div>
-      </AppCard>
-
-      <PresencePanel members={members} />
-
-      <MembersPanel members={members} ownerId={activeListReal?.owner_id} onInvite={() => setShowInviteModal(true)} />
-
-      {categories.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-          {categories.map((cat) => {
-            const style = getCategoryStyle(cat.name);
-            return (
-              <CategoryChip
-                key={cat.id}
-                icon={style.icon}
-                label={cat.name}
-                active={selectedCategory === cat.id}
-                activeClassName={style.fill}
-                onClick={() => setSelectedCategory(cat.id)}
-              />
-            );
-          })}
-          <CategoryChip
-            icon=""
-            label={t.allCategories}
-            active={selectedCategory === 'all'}
-            onClick={() => setSelectedCategory('all')}
+        <div className="mt-1.5">
+          <ShoppingHeader
+            title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
+            subtitle={t.subtitle}
+            totalItems={totalItems}
+            members={members}
+            onInvite={() => setShowInviteModal(true)}
           />
         </div>
-      )}
 
-      {visibleItems.length === 0 ? (
-        <EmptyState icon="🛒" title={t.empty} size="lg" />
-      ) : (
-        <div className="space-y-2">
-          {Object.entries(groupedItems).map(([catId, itemsInCategory]) => {
-            const category = categories.find((c) => c.id === catId) ?? null;
-            return (
-              <CategorySection
-                key={catId}
-                category={category}
-                items={itemsInCategory}
-                uncategorizedLabel={t.uncategorized}
-                onToggle={toggleItem}
-                onDelete={deleteItem}
-                onRename={renameItem}
-              />
-            );
-          })}
+        <div className="mt-1.5">
+          <QuickAddBar
+            value={input}
+            onChange={setInput}
+            onSubmit={addItem}
+            placeholder={t.placeholder}
+            categories={categories}
+            selectedCategoryId={effectiveAddCategoryId}
+            selectedCategoryLabel={effectiveAddCategoryName}
+            onSelectCategory={(id) => {
+              setAddItemCategory(id);
+              setAddItemError('');
+            }}
+            quantity={addQuantity}
+            onQuantityChange={setAddQuantity}
+          />
         </div>
-      )}
+
+        {categories.length > 0 && (
+          <div
+            className="flex gap-2.5 overflow-x-auto scroll-smooth pb-1 -mx-1 px-1 mt-3"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            <CategoryChip
+              icon=""
+              label={t.allCategories}
+              active={selectedCategory === 'all'}
+              onClick={() => setSelectedCategory('all')}
+            />
+            {categories.map((cat) => {
+              const style = getCategoryStyle(cat.name);
+              return (
+                <CategoryChip
+                  key={cat.id}
+                  icon={style.icon}
+                  label={cat.name}
+                  active={selectedCategory === cat.id}
+                  activeClassName={style.fill}
+                  onClick={() => setSelectedCategory(cat.id)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Only this region scrolls. Bottom padding clears the fixed
+          BottomNav (h-16 + safe-area-inset-bottom) so the last row is
+          never hidden behind it. */}
+      <div
+        className="flex-1 overflow-y-auto min-h-0 pt-3"
+        style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom) + 16px)' }}
+      >
+        {visibleItems.length === 0 ? (
+          <EmptyState
+            icon="🛒"
+            title={t.empty}
+            description={t.emptyDescription}
+            actionLabel={t.addItemTitle}
+            onAction={openAddForm}
+            size="lg"
+          />
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {toBuyGroups.map((group) => renderGroup(group, 'todo'))}
+
+            {doneGroups.length > 0 && (
+              <>
+                <div className="border-t border-gray-100 pt-2 mt-1">
+                  <p className="text-[13px] font-bold text-gray-500 px-1">
+                    {t.completedSectionLabel} · {doneItems.length}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2.5">{doneGroups.map((group) => renderGroup(group, 'done'))}</div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       <AddItemSheet
         open={showAddForm}
@@ -258,6 +381,8 @@ export default function ShoppingList() {
           setAddItemCategory(id);
           setAddItemError('');
         }}
+        quantity={addQuantity}
+        onQuantityChange={setAddQuantity}
         errorMessage={addItemError}
       />
 

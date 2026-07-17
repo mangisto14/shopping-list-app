@@ -17,9 +17,9 @@ function CategoryChip({ icon, label, active = false, completed = false, activeCl
   return (
     <button
       onClick={onClick}
-      className={`flex-shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition-all border flex items-center gap-1 ${
+      className={`flex-shrink-0 h-[34px] rounded-full px-3.5 text-[13.5px] font-semibold transition-all duration-[120ms] border flex items-center gap-1 ${
         active
-          ? `${activeClassName ?? 'bg-violet-500'} text-white border-transparent`
+          ? `${activeClassName ?? 'bg-blue-600'} text-white border-transparent shadow-[0_3px_8px_rgba(37,99,235,0.22)]`
           : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
       }`}
     >

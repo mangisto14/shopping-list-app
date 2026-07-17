@@ -1,22 +1,27 @@
 // src/components/navigation/BottomNav.tsx
 import { NavLink } from 'react-router-dom';
-import { HomeIcon, ShoppingCartIcon, ChartBarIcon, UsersIcon } from '@heroicons/react/24/outline';
+import { ListBulletIcon, Squares2X2Icon, UserGroupIcon, ClockIcon } from '@heroicons/react/24/outline';
 import {
-  HomeIcon as HomeIconSolid,
-  ShoppingCartIcon as ShoppingCartIconSolid,
-  ChartBarIcon as ChartBarIconSolid,
-  UsersIcon as UsersIconSolid,
+  ListBulletIcon as ListBulletIconSolid,
+  Squares2X2Icon as Squares2X2IconSolid,
+  UserGroupIcon as UserGroupIconSolid,
+  ClockIcon as ClockIconSolid,
 } from '@heroicons/react/24/solid';
 
-// DOM order matters under dir="rtl" (set globally in LanguageContext):
+// Tab set matches the Claude Design source of truth (list / categories /
+// family / history) rather than the app's prior tab set (home /
+// statistics) - those two pages remain reachable by direct URL, just not
+// pinned to the tab bar. See docs/design-mapping.md for the reasoning.
+//
+// DOM order matters under dir="rtl" (set globally via <html dir="rtl">):
 // grid/flex items lay out right-to-left, so the first tab here renders
-// as the rightmost tab on screen - בית first puts it on the right,
-// matching the target screenshots (בית rightmost, חברים leftmost).
+// as the rightmost tab on screen - matching the design's list-first,
+// history-last layout.
 const TABS = [
-  { to: '/home', label: 'בית', Icon: HomeIcon, ActiveIcon: HomeIconSolid, end: true },
-  { to: '/', label: 'רשימה', Icon: ShoppingCartIcon, ActiveIcon: ShoppingCartIconSolid, end: true },
-  { to: '/statistics', label: 'סטטיסטיקה', Icon: ChartBarIcon, ActiveIcon: ChartBarIconSolid, end: true },
-  { to: '/family', label: 'חברים', Icon: UsersIcon, ActiveIcon: UsersIconSolid, end: true },
+  { to: '/', label: 'רשימה', Icon: ListBulletIcon, ActiveIcon: ListBulletIconSolid, end: true },
+  { to: '/categories', label: 'קטגוריות', Icon: Squares2X2Icon, ActiveIcon: Squares2X2IconSolid, end: true },
+  { to: '/family', label: 'משפחה', Icon: UserGroupIcon, ActiveIcon: UserGroupIconSolid, end: true },
+  { to: '/history', label: 'היסטוריה', Icon: ClockIcon, ActiveIcon: ClockIconSolid, end: true },
 ];
 
 // Fixed, persistent bottom tab bar. Rendered once in App.jsx around the
@@ -30,7 +35,7 @@ export default function BottomNav() {
     <nav
       aria-label="ניווט ראשי"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]"
+      className="fixed bottom-0 inset-x-0 z-40 bg-white/92 backdrop-blur-md border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]"
     >
       <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto grid grid-cols-4 h-16">
         {TABS.map(({ to, label, Icon, ActiveIcon, end }) => (
@@ -39,8 +44,8 @@ export default function BottomNav() {
             to={to}
             end={end}
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset ${
-                isActive ? 'text-violet-600' : 'text-gray-400 hover:text-gray-600'
+              `flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset ${
+                isActive ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
               }`
             }
           >
@@ -48,7 +53,7 @@ export default function BottomNav() {
               const TabIcon = isActive ? ActiveIcon : Icon;
               return (
                 <>
-                  <TabIcon className="size-6" aria-hidden="true" />
+                  <TabIcon className="w-[22px] h-[22px]" aria-hidden="true" />
                   <span aria-current={isActive ? 'page' : undefined}>{label}</span>
                 </>
               );

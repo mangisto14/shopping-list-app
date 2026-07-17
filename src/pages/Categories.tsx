@@ -1,22 +1,51 @@
 // src/pages/CategoriesPage.tsx
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useActiveList } from '../ActiveListContext';
-import { useCategories } from '../hooks/useCategories';
+import { useCategories, type Category } from '../hooks/useCategories';
+import { useItems } from '../hooks/useItems';
 import { useLanguage } from '../LanguageContext';
+import CategoryCard from '../components/categories/CategoryCard';
+import CategoryAddTile from '../components/categories/CategoryAddTile';
+import CategorySheet from '../components/categories/CategorySheet';
 import EmptyState from '../components/ui/EmptyState';
 import { PageSkeleton } from '../components/ui/Skeleton';
 
 export default function CategoriesPage() {
   const { language } = useLanguage();
   const { activeListId, loading: listsLoading } = useActiveList();
-  const { categories, addCategory: addCategoryToList, updateCategory, deleteCategory } = useCategories();
-  const [input, setInput] = useState('');
+  const { categories, addCategory, updateCategory, deleteCategory } = useCategories();
+  const { items } = useItems();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
-  const addCategory = async () => {
-    if (!input.trim()) return;
-    await addCategoryToList(input);
-    setInput('');
+  const activeItemCount = items.filter((i) => !i.is_done).length;
+
+  const itemCountByCategory = useMemo(() => {
+    const counts: Record<string, number> = {};
+    items.forEach((item) => {
+      if (!item.category_id) return;
+      counts[item.category_id] = (counts[item.category_id] ?? 0) + 1;
+    });
+    return counts;
+  }, [items]);
+
+  const openCreateSheet = () => {
+    setEditingCategory(null);
+    setSheetOpen(true);
+  };
+
+  const openEditSheet = (category: Category) => {
+    setEditingCategory(category);
+    setSheetOpen(true);
+  };
+
+  const handleSave = (name: string) => {
+    if (editingCategory) {
+      updateCategory(editingCategory.id, name);
+    } else {
+      addCategory(name);
+    }
   };
 
   if (listsLoading) {
@@ -34,26 +63,22 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto p-4">
-      <h2 className="text-xl font-bold mb-4">קטגוריות</h2>
-
-      <div className="flex mb-4 gap-2">
-        <label htmlFor="new-category-input" className="sr-only">
-          {language === 'he' ? 'שם קטגוריה חדשה' : 'New category name'}
-        </label>
-        <input
-          id="new-category-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && addCategory()}
-          placeholder="הוסף קטגוריה"
-          className="border p-2 rounded flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+    <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4 pb-28 space-y-4">
+      <div className="flex items-center justify-between gap-3 px-1">
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <h1 className="text-[28px] font-extrabold text-gray-900 tracking-tight">קטגוריות</h1>
+          <p className="text-[13px] font-medium text-gray-500">
+            {categories.length} קטגוריות · {activeItemCount} פריטים פעילים
+          </p>
+        </div>
         <button
-          onClick={addCategory}
-          className="bg-blue-500 text-white px-4 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          onClick={openCreateSheet}
+          className="flex-shrink-0 h-10 rounded-full bg-blue-600 text-white text-sm font-bold flex items-center gap-1.5 px-4 shadow-[0_6px_14px_rgba(37,99,235,0.35)]"
         >
-          הוסף
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+          </svg>
+          <span>חדשה</span>
         </button>
       </div>
 
@@ -61,32 +86,31 @@ export default function CategoriesPage() {
         <EmptyState
           icon="🗂️"
           title={language === 'he' ? 'אין עדיין קטגוריות' : 'No categories yet'}
-          description={language === 'he' ? 'הוסף/י קטגוריה ראשונה למעלה' : 'Add your first category above'}
+          description={language === 'he' ? 'הוסף/י קטגוריה ראשונה' : 'Add your first category above'}
+          actionLabel={language === 'he' ? 'קטגוריה חדשה' : 'New category'}
+          onAction={openCreateSheet}
         />
       ) : (
-        <ul className="space-y-2">
+        <div className="grid grid-cols-2 gap-3">
           {categories.map((cat) => (
-            <li key={cat.id} className="flex justify-between items-center bg-gray-100 p-2 rounded">
-              <label htmlFor={`category-${cat.id}`} className="sr-only">
-                {language === 'he' ? 'שם קטגוריה' : 'Category name'}
-              </label>
-              <input
-                id={`category-${cat.id}`}
-                defaultValue={cat.name}
-                onBlur={(e) => updateCategory(cat.id, e.target.value)}
-                className="flex-1 bg-transparent border-b focus:outline-none focus:border-blue-500"
-              />
-              <button
-                onClick={() => deleteCategory(cat.id)}
-                aria-label={language === 'he' ? 'מחק קטגוריה' : 'Delete category'}
-                className="text-red-500 ml-2 focus:outline-none focus:ring-2 focus:ring-red-400 rounded"
-              >
-                🗑️
-              </button>
-            </li>
+            <CategoryCard
+              key={cat.id}
+              category={cat}
+              itemCount={itemCountByCategory[cat.id] ?? 0}
+              onClick={() => openEditSheet(cat)}
+            />
           ))}
-        </ul>
+          <CategoryAddTile label="יצירת קטגוריה חדשה" onClick={openCreateSheet} />
+        </div>
       )}
+
+      <CategorySheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        category={editingCategory}
+        onSave={handleSave}
+        onDelete={deleteCategory}
+      />
     </div>
   );
 }

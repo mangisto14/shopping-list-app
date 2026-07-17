@@ -17,13 +17,13 @@ export default function ListSwitcher({ lists, activeList, onSelect, onCreateNew 
     <>
       <button
         onClick={() => setOpen(true)}
-        className="w-full flex items-center justify-between gap-2 bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 transition-all hover:shadow-md active:scale-[0.99]"
+        className="flex items-center gap-1.5 px-1 py-0.5 -mx-1 text-gray-500 hover:text-gray-700 transition-colors active:scale-[0.98]"
       >
-        <span className="flex items-center gap-2 font-semibold text-gray-800 min-w-0">
-          <span className="text-xl flex-shrink-0">{activeList?.emoji ?? '📋'}</span>
+        <span className="flex items-center gap-1 text-[13px] font-medium min-w-0">
+          <span className="flex-shrink-0">{activeList?.emoji ?? '📋'}</span>
           <span className="truncate">{activeList?.name ?? '...'}</span>
         </span>
-        <span className="flex-shrink-0 text-gray-400 text-sm">⌄</span>
+        <span className="flex-shrink-0 text-xs">⌄</span>
       </button>
 
       <ListSelectorModal

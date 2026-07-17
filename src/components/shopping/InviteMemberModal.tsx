@@ -11,7 +11,7 @@ interface InviteMemberModalProps {
 
 export default function InviteMemberModal({ open, onClose, onInvite }: InviteMemberModalProps) {
   return (
-    <BottomSheet open={open} onClose={onClose} title="הזמן בני משפחה או שותפים לדירה">
+    <BottomSheet open={open} onClose={onClose} title="הזמנת בני משפחה או שותפים לדירה">
       <InviteLinkCard />
 
       <div className="flex items-center gap-2">

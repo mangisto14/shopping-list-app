@@ -1,86 +1,52 @@
 // src/components/shopping/CategorySection.tsx
-import { useState } from 'react';
-import type { Item } from '../../hooks/useItems';
-import ItemCard from './ItemCard';
-
-interface CategoryLike {
-  id: string;
-  name: string;
-}
+import type { ReactNode } from 'react';
+import { getCategoryStyle } from '../../theme/categoryStyles';
 
 interface CategorySectionProps {
-  category: CategoryLike | null; // null = the "uncategorized" group
-  items: Item[];
-  uncategorizedLabel: string;
-  onToggle: (item: Item) => void;
-  onDelete: (id: string) => void;
-  onRename: (id: string, newName: string) => void;
+  categoryName: string | null; // null = uncategorized
+  count: number;
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  children: ReactNode;
 }
 
-const CATEGORY_STYLES: Record<string, { icon: string; bg: string; text: string; fill: string }> = {
-  'מוצרי חלב': { icon: '🥛', bg: 'bg-blue-50', text: 'text-blue-700', fill: 'bg-blue-500' },
-  'בשר ודגים': { icon: '🍖', bg: 'bg-red-50', text: 'text-red-700', fill: 'bg-red-500' },
-  'ירקות': { icon: '🥦', bg: 'bg-green-50', text: 'text-green-700', fill: 'bg-green-500' },
-  // Both spellings map to the same style: "מאפייה" is the name given in
-  // the design spec, "מאפים ולחם" is what the default-categories
-  // migration actually seeds - covering both means real seeded data
-  // gets a color, not just the fallback.
-  'מאפייה': { icon: '🍞', bg: 'bg-orange-50', text: 'text-orange-700', fill: 'bg-orange-500' },
-  'מאפים ולחם': { icon: '🍞', bg: 'bg-orange-50', text: 'text-orange-700', fill: 'bg-orange-500' },
-};
-
-const FALLBACK_STYLE = { icon: '🛒', bg: 'bg-gray-50', text: 'text-gray-700', fill: 'bg-gray-400' };
-
-export function getCategoryStyle(name: string | null | undefined) {
-  if (!name) return FALLBACK_STYLE;
-  return CATEGORY_STYLES[name] ?? FALLBACK_STYLE;
-}
-
-export default function CategorySection({
-  category,
-  items,
-  uncategorizedLabel,
-  onToggle,
-  onDelete,
-  onRename,
-}: CategorySectionProps) {
-  const [expanded, setExpanded] = useState(true);
-  const style = getCategoryStyle(category?.name);
-  const name = category?.name ?? uncategorizedLabel;
-  const doneCount = items.filter((i) => i.is_done).length;
+// Collapsible category group: icon + name + count as a compact, tinted
+// header (visually distinct per category), chevron disclosure. Used for
+// both active and completed sections - the same grouped structure, per
+// the design spec. Item rows themselves are passed as children so this
+// component stays purely about the group chrome/collapse behavior.
+export default function CategorySection({ categoryName, count, expanded, onToggleExpanded, children }: CategorySectionProps) {
+  const style = getCategoryStyle(categoryName);
 
   return (
     <div>
       <button
-        onClick={() => setExpanded((e) => !e)}
-        className="w-full flex items-center justify-between px-1 py-1.5 group"
+        onClick={onToggleExpanded}
+        className={`w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 ${style.bg}`}
       >
-        <span className="flex items-center gap-2">
-          <span className="bg-violet-100 text-violet-700 rounded-full px-2.5 py-0.5 text-xs font-bold">
-            {doneCount}/{items.length}
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[15px] flex-shrink-0" aria-hidden="true">
+            {style.icon}
           </span>
-          <span className={`inline-block text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}>⌄</span>
+          <span className={`text-[13px] font-bold truncate ${style.text}`}>{categoryName ?? 'ללא קטגוריה'}</span>
         </span>
-        <span className="flex items-center gap-2 font-bold text-gray-800">
-          {name}
-          <span className="text-lg">{style.icon}</span>
+        <span className="flex items-center gap-1.5 flex-shrink-0">
+          <span className={`text-[12px] font-semibold ${style.text} opacity-70`}>{count}</span>
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            className={`flex-shrink-0 ${style.text} transition-transform duration-150`}
+            style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+            aria-hidden="true"
+          >
+            <path d="M3 1l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </span>
       </button>
 
-      {expanded && (
-        <ul className="space-y-2 mt-1.5 transition-all">
-          {items.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              categoryIcon={style.icon}
-              onToggle={() => onToggle(item)}
-              onDelete={() => onDelete(item.id)}
-              onRename={onRename}
-            />
-          ))}
-        </ul>
-      )}
+      {expanded && <div className="flex flex-col gap-1 mt-1">{children}</div>}
     </div>
   );
 }
