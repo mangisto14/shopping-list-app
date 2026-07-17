@@ -4,13 +4,14 @@ import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
 import { useActiveList } from '../ActiveListContext';
 import { useItems, type Item } from '../hooks/useItems';
-import { useCategories } from '../hooks/useCategories';
+import { useCategories, type Category } from '../hooks/useCategories';
 import { useMembers } from '../hooks/useMembers';
 import type { Member } from '../components/ui/MemberAvatar';
 import ShoppingHeader from '../components/shopping/ShoppingHeader';
 import InviteMemberModal from '../components/shopping/InviteMemberModal';
 import { getCategoryStyle } from '../theme/categoryStyles';
 import ItemCard from '../components/shopping/ItemCard';
+import CategorySection from '../components/shopping/CategorySection';
 import QuickAddBar from '../components/shopping/QuickAddBar';
 import FloatingAddButton from '../components/shopping/FloatingAddButton';
 import AddItemSheet from '../components/shopping/AddItemSheet';
@@ -28,6 +29,32 @@ import { PageSkeleton } from '../components/ui/Skeleton';
 // beyond "the Nth list in the array gets the Nth emoji".
 const EMOJI_PALETTE = ['🏠', '🛒', '🛋️', '🚗', '✈️', '🎉', '🏡', '💼'];
 
+interface CategoryGroup {
+  categoryId: string | null; // null = uncategorized
+  categoryName: string | null;
+  items: Item[];
+}
+
+// Groups items by category, preserving the categories list's own order,
+// with any uncategorized items collected into a trailing group. Empty
+// groups are dropped - a category with nothing in this section (e.g. no
+// completed dairy items yet) shouldn't render an empty header.
+function groupByCategory(items: Item[], categories: Category[]): CategoryGroup[] {
+  const byId = new Map<string, CategoryGroup>(
+    categories.map((c) => [c.id, { categoryId: c.id, categoryName: c.name, items: [] }])
+  );
+  const uncategorized: CategoryGroup = { categoryId: null, categoryName: null, items: [] };
+
+  for (const item of items) {
+    const group = (item.category_id && byId.get(item.category_id)) || uncategorized;
+    group.items.push(item);
+  }
+
+  const groups = [...byId.values()].filter((g) => g.items.length > 0);
+  if (uncategorized.items.length > 0) groups.push(uncategorized);
+  return groups;
+}
+
 export default function ShoppingList() {
   const { language } = useLanguage();
   const navigate = useNavigate();
@@ -43,11 +70,23 @@ export default function ShoppingList() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showCreateListModal, setShowCreateListModal] = useState(false);
-  const [completedOpen, setCompletedOpen] = useState(true);
+  // Collapsed category groups, keyed "todo:<categoryId|none>" /
+  // "done:<categoryId|none>" so the same category can be independently
+  // collapsed in the active vs. completed sections. Default: everything
+  // expanded (nothing in the set).
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
   // Which section (to-buy/completed) a just-toggled item should keep
   // rendering in for a short window after the tap, so the checkbox's
   // fill/fade transition has time to play before the item jumps to the
-  // other list - avoids an abrupt re-render on every toggle. The real
+  // other section - avoids an abrupt re-render on every toggle. The real
   // toggleItem() mutation still fires immediately; this only delays
   // which section the item is *rendered* in, not when the data changes.
   const [pendingMoves, setPendingMoves] = useState<Map<string, 'todo' | 'done'>>(new Map());
@@ -150,6 +189,9 @@ export default function ShoppingList() {
   const toBuyItems = useMemo(() => visibleItems.filter((i) => sectionFor(i) === 'todo'), [visibleItems, pendingMoves]);
   const doneItems = useMemo(() => visibleItems.filter((i) => sectionFor(i) === 'done'), [visibleItems, pendingMoves]);
 
+  const toBuyGroups = useMemo(() => groupByCategory(toBuyItems, categories), [toBuyItems, categories]);
+  const doneGroups = useMemo(() => groupByCategory(doneItems, categories), [doneItems, categories]);
+
   const handleToggle = (item: Item) => {
     const currentSection: 'todo' | 'done' = item.is_done ? 'done' : 'todo';
     setPendingMoves((prev) => new Map(prev).set(item.id, currentSection));
@@ -175,8 +217,6 @@ export default function ShoppingList() {
     pendingMoveTimeouts.current.set(item.id, timeoutId);
   };
 
-  const categoryNameFor = (categoryId: string | null) => categories.find((c) => c.id === categoryId)?.name;
-
   const totalItems = items.length;
 
   if (listsLoading) {
@@ -190,6 +230,30 @@ export default function ShoppingList() {
       </div>
     );
   }
+
+  const renderGroup = (group: CategoryGroup, section: 'todo' | 'done') => {
+    const key = `${section}:${group.categoryId ?? 'none'}`;
+    return (
+      <CategorySection
+        key={key}
+        categoryName={group.categoryName}
+        count={group.items.length}
+        expanded={!collapsedGroups.has(key)}
+        onToggleExpanded={() => toggleGroup(key)}
+      >
+        {group.items.map((item) => (
+          <ItemCard
+            key={item.id}
+            item={item}
+            categoryName={group.categoryName ?? undefined}
+            onToggle={() => handleToggle(item)}
+            onDelete={() => deleteItem(item.id)}
+            onRename={renameItem}
+          />
+        ))}
+      </CategorySection>
+    );
+  };
 
   return (
     <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-2 pb-28">
@@ -263,58 +327,17 @@ export default function ShoppingList() {
           />
         </div>
       ) : (
-        <div className="flex flex-col gap-2 mt-2">
-          <p className="text-[13px] font-bold text-gray-500 tracking-wide px-1">
-            {t.toBuyLabel} · {toBuyItems.length}
-          </p>
-          <ul className="space-y-1.5">
-            {toBuyItems.map((item) => (
-              <ItemCard
-                key={item.id}
-                item={item}
-                categoryName={categoryNameFor(item.category_id)}
-                onToggle={() => handleToggle(item)}
-                onDelete={() => deleteItem(item.id)}
-                onRename={renameItem}
-              />
-            ))}
-          </ul>
+        <div className="flex flex-col gap-2.5 mt-3">
+          {toBuyGroups.map((group) => renderGroup(group, 'todo'))}
 
-          {doneItems.length > 0 && (
+          {doneGroups.length > 0 && (
             <>
-              <div className="border-t border-gray-100 mt-1" />
-              <button
-                onClick={() => setCompletedOpen((o) => !o)}
-                className="w-full flex items-center justify-between px-1 pt-2 pb-0.5"
-              >
-                <span className="text-[13px] font-bold text-gray-500">
+              <div className="border-t border-gray-100 pt-2 mt-1">
+                <p className="text-[13px] font-bold text-gray-500 px-1">
                   {t.completedSectionLabel} · {doneItems.length}
-                </span>
-                <svg
-                  width="12"
-                  height="7"
-                  viewBox="0 0 12 7"
-                  fill="none"
-                  className={`transition-transform ${completedOpen ? '' : 'rotate-180'}`}
-                  aria-hidden="true"
-                >
-                  <path d="M1 1l5 5 5-5" stroke="#9CA3AF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              {completedOpen && (
-                <ul className="space-y-1.5">
-                  {doneItems.map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      categoryName={categoryNameFor(item.category_id)}
-                      onToggle={() => handleToggle(item)}
-                      onDelete={() => deleteItem(item.id)}
-                      onRename={renameItem}
-                    />
-                  ))}
-                </ul>
-              )}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2.5">{doneGroups.map((group) => renderGroup(group, 'done'))}</div>
             </>
           )}
         </div>
