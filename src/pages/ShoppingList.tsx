@@ -256,67 +256,89 @@ export default function ShoppingList() {
   };
 
   return (
-    <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-2 pb-28">
-      <ListSwitcher
-        lists={displayLists}
-        activeList={activeList}
-        onSelect={(id) => setActiveListId(id)}
-        onCreateNew={() => setShowCreateListModal(true)}
-      />
-
-      <div className="mt-1.5">
-        <ShoppingHeader
-          title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
-          subtitle={t.subtitle}
-          totalItems={totalItems}
-          members={members}
-          onInvite={() => setShowInviteModal(true)}
+    <div
+      className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 flex flex-col"
+      style={{ height: 'calc(100dvh - 3rem)' }}
+    >
+      {/* Fixed top region: list switcher, header, quick-add, category
+          filters. None of this scrolls - only the item list below does
+          (see the flex-1 overflow-y-auto container). `calc(100dvh -
+          3rem)` on the outer wrapper accounts for App.jsx's own h-12
+          chrome row above this page, so this page's total height plus
+          that row equals exactly the viewport height - no outer/page-
+          level scroll competing with the inner list scroll. */}
+      <div className="flex-shrink-0 pt-2">
+        <ListSwitcher
+          lists={displayLists}
+          activeList={activeList}
+          onSelect={(id) => setActiveListId(id)}
+          onCreateNew={() => setShowCreateListModal(true)}
         />
-      </div>
 
-      <div className="mt-1.5">
-        <QuickAddBar
-          value={input}
-          onChange={setInput}
-          onSubmit={addItem}
-          placeholder={t.placeholder}
-          categories={categories}
-          selectedCategoryLabel={effectiveAddCategoryName}
-          onOpenCategoryPicker={openAddForm}
-          quantity={addQuantity}
-          onQuantityChange={setAddQuantity}
-        />
-      </div>
-
-      {categories.length > 0 && (
-        <div
-          className="flex gap-2.5 overflow-x-auto scroll-smooth pb-1 -mx-1 px-1 mt-3"
-          style={{ WebkitOverflowScrolling: 'touch' }}
-        >
-          <CategoryChip
-            icon=""
-            label={t.allCategories}
-            active={selectedCategory === 'all'}
-            onClick={() => setSelectedCategory('all')}
+        <div className="mt-1.5">
+          <ShoppingHeader
+            title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
+            subtitle={t.subtitle}
+            totalItems={totalItems}
+            members={members}
+            onInvite={() => setShowInviteModal(true)}
           />
-          {categories.map((cat) => {
-            const style = getCategoryStyle(cat.name);
-            return (
-              <CategoryChip
-                key={cat.id}
-                icon={style.icon}
-                label={cat.name}
-                active={selectedCategory === cat.id}
-                activeClassName={style.fill}
-                onClick={() => setSelectedCategory(cat.id)}
-              />
-            );
-          })}
         </div>
-      )}
 
-      {visibleItems.length === 0 ? (
-        <div className="mt-3">
+        <div className="mt-1.5">
+          <QuickAddBar
+            value={input}
+            onChange={setInput}
+            onSubmit={addItem}
+            placeholder={t.placeholder}
+            categories={categories}
+            selectedCategoryId={effectiveAddCategoryId}
+            selectedCategoryLabel={effectiveAddCategoryName}
+            onSelectCategory={(id) => {
+              setAddItemCategory(id);
+              setAddItemError('');
+            }}
+            quantity={addQuantity}
+            onQuantityChange={setAddQuantity}
+          />
+        </div>
+
+        {categories.length > 0 && (
+          <div
+            className="flex gap-2.5 overflow-x-auto scroll-smooth pb-1 -mx-1 px-1 mt-3"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            <CategoryChip
+              icon=""
+              label={t.allCategories}
+              active={selectedCategory === 'all'}
+              onClick={() => setSelectedCategory('all')}
+            />
+            {categories.map((cat) => {
+              const style = getCategoryStyle(cat.name);
+              return (
+                <CategoryChip
+                  key={cat.id}
+                  icon={style.icon}
+                  label={cat.name}
+                  active={selectedCategory === cat.id}
+                  activeClassName={style.fill}
+                  onClick={() => setSelectedCategory(cat.id)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Only this region scrolls. Bottom padding clears the fixed
+          BottomNav (h-16 + safe-area-inset-bottom) so the last row is
+          never hidden behind it. */}
+      <div
+        className="flex-1 overflow-y-auto min-h-0 pt-3"
+        style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom) + 16px)' }}
+      >
+        {visibleItems.length === 0 ? (
           <EmptyState
             icon="🛒"
             title={t.empty}
@@ -325,23 +347,23 @@ export default function ShoppingList() {
             onAction={openAddForm}
             size="lg"
           />
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2.5 mt-3">
-          {toBuyGroups.map((group) => renderGroup(group, 'todo'))}
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {toBuyGroups.map((group) => renderGroup(group, 'todo'))}
 
-          {doneGroups.length > 0 && (
-            <>
-              <div className="border-t border-gray-100 pt-2 mt-1">
-                <p className="text-[13px] font-bold text-gray-500 px-1">
-                  {t.completedSectionLabel} · {doneItems.length}
-                </p>
-              </div>
-              <div className="flex flex-col gap-2.5">{doneGroups.map((group) => renderGroup(group, 'done'))}</div>
-            </>
-          )}
-        </div>
-      )}
+            {doneGroups.length > 0 && (
+              <>
+                <div className="border-t border-gray-100 pt-2 mt-1">
+                  <p className="text-[13px] font-bold text-gray-500 px-1">
+                    {t.completedSectionLabel} · {doneItems.length}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2.5">{doneGroups.map((group) => renderGroup(group, 'done'))}</div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       <AddItemSheet
         open={showAddForm}

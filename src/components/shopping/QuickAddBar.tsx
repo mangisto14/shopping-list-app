@@ -1,7 +1,9 @@
 // src/components/shopping/QuickAddBar.tsx
+import { useState } from 'react';
 import { getCategoryStyle } from '../../theme/categoryStyles';
 import type { Category } from '../../hooks/useCategories';
 import QuantityStepper from '../ui/QuantityStepper';
+import CategoryDropdown from './CategoryDropdown';
 
 interface QuickAddBarProps {
   value: string;
@@ -9,8 +11,9 @@ interface QuickAddBarProps {
   onSubmit: () => void;
   placeholder: string;
   categories: Category[];
+  selectedCategoryId: string;
   selectedCategoryLabel: string;
-  onOpenCategoryPicker: () => void;
+  onSelectCategory: (id: string) => void;
   quantity: number;
   onQuantityChange: (quantity: number) => void;
 }
@@ -19,9 +22,13 @@ interface QuickAddBarProps {
 // Design's main-list screen. Fires the same addItem()/addItemCategory
 // state ShoppingList.tsx already threads through AddItemSheet - this is
 // a second, faster entry point into the same flow, not a parallel one.
-// Tapping the category chip opens the full AddItemSheet (via
-// onOpenCategoryPicker) so category selection/quick suggestions still
-// live in one place.
+//
+// The category chip opens a lightweight, self-contained CategoryDropdown
+// right here - it does NOT open the full Add Item bottom sheet anymore.
+// Selecting a category writes straight to the same addItemCategory state
+// AddItemSheet uses, so the choice persists whichever entry point the
+// item eventually gets submitted through. The sheet now opens only from
+// the FAB.
 //
 // The quantity stepper has no backing `quantity` column on `items` (no
 // schema change in scope here) - ShoppingList.tsx interprets it as "add
@@ -33,11 +40,13 @@ export default function QuickAddBar({
   onSubmit,
   placeholder,
   categories,
+  selectedCategoryId,
   selectedCategoryLabel,
-  onOpenCategoryPicker,
+  onSelectCategory,
   quantity,
   onQuantityChange,
 }: QuickAddBarProps) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const style = getCategoryStyle(selectedCategoryLabel);
 
   return (
@@ -62,16 +71,29 @@ export default function QuickAddBar({
 
       <div className="flex items-center justify-between gap-2">
         {categories.length > 0 ? (
-          <button
-            onClick={onOpenCategoryPicker}
-            className={`h-9 rounded-full ${style.bg} ${style.text} text-sm font-semibold flex items-center gap-1.5 px-3.5`}
-          >
-            <span>{style.icon}</span>
-            <span>{selectedCategoryLabel}</span>
-            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
-              <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setDropdownOpen((open) => !open)}
+              aria-haspopup="listbox"
+              aria-expanded={dropdownOpen}
+              className={`h-9 rounded-full ${style.bg} ${style.text} text-sm font-semibold flex items-center gap-1.5 px-3.5`}
+            >
+              <span>{style.icon}</span>
+              <span>{selectedCategoryLabel}</span>
+              <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {dropdownOpen && (
+              <CategoryDropdown
+                categories={categories}
+                selectedCategoryId={selectedCategoryId}
+                onSelect={onSelectCategory}
+                onClose={() => setDropdownOpen(false)}
+              />
+            )}
+          </div>
         ) : (
           <span />
         )}
