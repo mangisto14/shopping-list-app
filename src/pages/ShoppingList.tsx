@@ -35,6 +35,31 @@ interface CategoryGroup {
   items: Item[];
 }
 
+interface ItemCluster {
+  key: string;
+  representative: Item;
+  ids: string[];
+}
+
+// Groups items with an identical name into one displayed row ("Nx").
+// Deliberately keyed on exact name only - different names are never
+// merged, even within the same category. Each underlying row is still
+// its own `items` record; this is a display/interaction grouping layer
+// only, not a schema change. Order is preserved (first occurrence
+// order), so a cluster doesn't jump position when its count changes.
+function clusterByName(items: Item[]): ItemCluster[] {
+  const clusters = new Map<string, ItemCluster>();
+  for (const item of items) {
+    const existing = clusters.get(item.name);
+    if (existing) {
+      existing.ids.push(item.id);
+    } else {
+      clusters.set(item.name, { key: item.name, representative: item, ids: [item.id] });
+    }
+  }
+  return [...clusters.values()];
+}
+
 // Groups items by category, preserving the categories list's own order,
 // with any uncategorized items collected into a trailing group. Empty
 // groups are dropped - a category with nothing in this section (e.g. no
@@ -233,6 +258,7 @@ export default function ShoppingList() {
 
   const renderGroup = (group: CategoryGroup, section: 'todo' | 'done') => {
     const key = `${section}:${group.categoryId ?? 'none'}`;
+    const clusters = clusterByName(group.items);
     return (
       <CategorySection
         key={key}
@@ -241,14 +267,21 @@ export default function ShoppingList() {
         expanded={!collapsedGroups.has(key)}
         onToggleExpanded={() => toggleGroup(key)}
       >
-        {group.items.map((item) => (
+        {clusters.map((cluster) => (
           <ItemCard
-            key={item.id}
-            item={item}
+            key={cluster.key}
+            item={cluster.representative}
+            count={cluster.ids.length}
             categoryName={group.categoryName ?? undefined}
-            onToggle={() => handleToggle(item)}
-            onDelete={() => deleteItem(item.id)}
-            onRename={renameItem}
+            onToggle={() => handleToggle(cluster.representative)}
+            // Swipe/tap delete on a grouped row is destructive: it
+            // removes every unit in the cluster, never just one - per
+            // explicit product decision, decreasing quantity is only
+            // done via the +/- controls below, not swipe-delete.
+            onDelete={() => cluster.ids.forEach((id) => deleteItem(id))}
+            onRename={(newName) => cluster.ids.forEach((id) => renameItem(id, newName))}
+            onIncrement={() => addItemToList(cluster.representative.name, cluster.representative.category_id)}
+            onDecrement={() => deleteItem(cluster.ids[cluster.ids.length - 1])}
           />
         ))}
       </CategorySection>
