@@ -156,16 +156,20 @@ export default function ShoppingList() {
   // Real lists enriched with the deterministic emoji and real
   // item_count from useLists.ts. No mock fallback: an empty realLists
   // array now renders as an honest empty list, not fabricated demo
-  // lists.
+  // lists. Archived lists are deliberately excluded here - the quick
+  // switcher is for actively-used lists; archived ones are only
+  // reachable (and restorable) from the Lists page.
   const displayLists: ListInfo[] = useMemo(
     () =>
-      realLists.map((l, i) => ({
-        id: l.id,
-        name: l.name,
-        emoji: EMOJI_PALETTE[i % EMOJI_PALETTE.length],
-        members: l.member_count,
-        items: l.item_count,
-      })),
+      realLists
+        .filter((l) => !l.archived)
+        .map((l, i) => ({
+          id: l.id,
+          name: l.name,
+          emoji: EMOJI_PALETTE[i % EMOJI_PALETTE.length],
+          members: l.member_count,
+          items: l.item_count,
+        })),
     [realLists]
   );
 

@@ -8,6 +8,7 @@ export interface ShoppingListSummary {
   name: string;
   owner_id: string;
   created_at: string;
+  archived: boolean;
   member_count: number;
   item_count: number;
 }
@@ -26,7 +27,7 @@ export function useLists() {
     // guess, without adding a new query anywhere.
     const { data, error } = await supabase
       .from('lists')
-      .select('id, name, owner_id, created_at, list_members(count), items(count)')
+      .select('id, name, owner_id, created_at, archived, list_members(count), items(count)')
       .order('created_at', { ascending: true });
 
     if (!error && data) {
@@ -36,6 +37,7 @@ export function useLists() {
           name: row.name,
           owner_id: row.owner_id,
           created_at: row.created_at,
+          archived: row.archived ?? false,
           member_count: row.list_members?.[0]?.count ?? 0,
           item_count: row.items?.[0]?.count ?? 0,
         }))
@@ -74,5 +76,50 @@ export function useLists() {
     return list;
   }
 
-  return { lists, loading, createList, refetch: fetchLists };
+  // Rename/delete/archive all use RLS policies that already exist
+  // (lists_update_owner_only, lists_delete_owner_only) - no schema or
+  // policy change needed beyond the `archived` column itself. Each
+  // applies an optimistic local update first, same pattern as
+  // createList/addItem elsewhere in this app, and rolls back on error.
+  async function updateListName(id: string, name: string): Promise<boolean> {
+    const trimmed = name.trim();
+    if (!trimmed) return false;
+    const previous = lists.find((l) => l.id === id);
+    if (!previous) return false;
+    setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: trimmed } : l)));
+
+    const { error } = await supabase.from('lists').update({ name: trimmed }).eq('id', id);
+    if (error) {
+      setLists((prev) => prev.map((l) => (l.id === id ? previous : l)));
+      return false;
+    }
+    return true;
+  }
+
+  async function setListArchived(id: string, archived: boolean): Promise<boolean> {
+    const previous = lists.find((l) => l.id === id);
+    if (!previous) return false;
+    setLists((prev) => prev.map((l) => (l.id === id ? { ...l, archived } : l)));
+
+    const { error } = await supabase.from('lists').update({ archived }).eq('id', id);
+    if (error) {
+      setLists((prev) => prev.map((l) => (l.id === id ? previous : l)));
+      return false;
+    }
+    return true;
+  }
+
+  async function deleteList(id: string): Promise<boolean> {
+    const backup = lists;
+    setLists((prev) => prev.filter((l) => l.id !== id));
+
+    const { error } = await supabase.from('lists').delete().eq('id', id);
+    if (error) {
+      setLists(backup);
+      return false;
+    }
+    return true;
+  }
+
+  return { lists, loading, createList, updateListName, setListArchived, deleteList, refetch: fetchLists };
 }

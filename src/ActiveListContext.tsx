@@ -11,13 +11,16 @@ interface ActiveListContextValue {
   activeList: ShoppingListSummary | null;
   setActiveListId: (id: string) => void;
   createList: (name: string) => Promise<ShoppingListSummary | null>;
+  updateListName: (id: string, name: string) => Promise<boolean>;
+  setListArchived: (id: string, archived: boolean) => Promise<boolean>;
+  deleteList: (id: string) => Promise<boolean>;
   refetchLists: () => Promise<void>;
 }
 
 const ActiveListContext = createContext<ActiveListContextValue | undefined>(undefined);
 
 export function ActiveListProvider({ children }: { children: ReactNode }) {
-  const { lists, loading, createList, refetch } = useLists();
+  const { lists, loading, createList, updateListName, setListArchived, deleteList, refetch } = useLists();
   const [activeListId, setActiveListIdState] = useState<string | null>(() =>
     localStorage.getItem(STORAGE_KEY)
   );
@@ -25,9 +28,12 @@ export function ActiveListProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading) return;
 
-    const storedIsValid = lists.some((l) => l.id === activeListId);
+    // An archived list can't be "active" - if the stored id belongs to
+    // a list that's since been archived or deleted, fall back to the
+    // first non-archived list instead.
+    const storedIsValid = lists.some((l) => l.id === activeListId && !l.archived);
     if (!storedIsValid) {
-      const fallback = lists[0]?.id ?? null;
+      const fallback = lists.find((l) => !l.archived)?.id ?? null;
       setActiveListIdState(fallback);
       if (fallback) localStorage.setItem(STORAGE_KEY, fallback);
       else localStorage.removeItem(STORAGE_KEY);
@@ -46,7 +52,18 @@ export function ActiveListProvider({ children }: { children: ReactNode }) {
 
   return (
     <ActiveListContext.Provider
-      value={{ lists, loading, activeListId, activeList, setActiveListId, createList, refetchLists: refetch }}
+      value={{
+        lists,
+        loading,
+        activeListId,
+        activeList,
+        setActiveListId,
+        createList,
+        updateListName,
+        setListArchived,
+        deleteList,
+        refetchLists: refetch,
+      }}
     >
       {children}
     </ActiveListContext.Provider>
