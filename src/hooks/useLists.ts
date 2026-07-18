@@ -14,9 +14,25 @@ export interface ShoppingListSummary {
 }
 
 export function useLists() {
-  const { user } = useAuth();
+  // `authLoading` matters here, not just `user`: useAuth() starts every
+  // mount with `user === null` for the brief window before its own
+  // getSession() call resolves, indistinguishable from "confirmed
+  // logged out" if only `user` is checked. Without waiting for
+  // authLoading to clear, this hook would report "loading: false,
+  // lists: []" during that transient window on every page load -
+  // exactly the shape ActiveListContext otherwise (correctly) treats
+  // as "confirmed zero lists," wiping a valid persisted active list
+  // before auth has even resolved once.
+  const { user, loading: authLoading } = useAuth();
   const [lists, setLists] = useState<ShoppingListSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  // Distinguishes "we asked and there are genuinely zero lists" from
+  // "the fetch itself failed, we don't actually know" - callers (in
+  // particular ActiveListContext) must not treat these the same way.
+  // A failed fetch leaves `lists` at whatever it was before (this
+  // function never clears it on error), but that alone isn't visible
+  // to a caller that only looks at `lists.length === 0`.
+  const [error, setError] = useState<string | null>(null);
 
   const fetchLists = useCallback(async () => {
     if (!user) return;
@@ -25,35 +41,43 @@ export function useLists() {
     // purely additive read, not a change to any CRUD operation. Lets
     // the list switcher show real per-list item counts instead of a
     // guess, without adding a new query anywhere.
-    const { data, error } = await supabase
+    const { data, error: fetchError } = await supabase
       .from('lists')
       .select('id, name, owner_id, created_at, archived, list_members(count), items(count)')
       .order('created_at', { ascending: true });
 
-    if (!error && data) {
-      setLists(
-        data.map((row: any) => ({
-          id: row.id,
-          name: row.name,
-          owner_id: row.owner_id,
-          created_at: row.created_at,
-          archived: row.archived ?? false,
-          member_count: row.list_members?.[0]?.count ?? 0,
-          item_count: row.items?.[0]?.count ?? 0,
-        }))
-      );
+    if (fetchError || !data) {
+      console.error('useLists: failed to fetch lists', fetchError);
+      setError(fetchError?.message ?? 'unknown_error');
+      setLoading(false);
+      return;
     }
+
+    setError(null);
+    setLists(
+      data.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        owner_id: row.owner_id,
+        created_at: row.created_at,
+        archived: row.archived ?? false,
+        member_count: row.list_members?.[0]?.count ?? 0,
+        item_count: row.items?.[0]?.count ?? 0,
+      }))
+    );
     setLoading(false);
   }, [user]);
 
   useEffect(() => {
+    if (authLoading) return;
     if (!user) {
       setLists([]);
+      setError(null);
       setLoading(false);
       return;
     }
     fetchLists();
-  }, [user, fetchLists]);
+  }, [user, authLoading, fetchLists]);
 
   async function createList(name: string) {
     if (!user || !name.trim()) return null;
@@ -121,5 +145,5 @@ export function useLists() {
     return true;
   }
 
-  return { lists, loading, createList, updateListName, setListArchived, deleteList, refetch: fetchLists };
+  return { lists, loading, error, createList, updateListName, setListArchived, deleteList, refetch: fetchLists };
 }

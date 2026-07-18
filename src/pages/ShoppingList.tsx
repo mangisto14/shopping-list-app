@@ -99,7 +99,7 @@ export default function ShoppingList() {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const t = shoppingLabels[language as 'he' | 'en'];
-  const { lists: realLists, activeListId, setActiveListId, loading: listsLoading } = useActiveList();
+  const { lists: realLists, activeListId, setActiveListId, loading: listsLoading, error: listsError } = useActiveList();
 
   const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
   const { categories } = useCategories();
@@ -279,6 +279,25 @@ export default function ShoppingList() {
 
   if (listsLoading) {
     return <PageSkeleton />;
+  }
+
+  // Distinct from "you genuinely have zero lists": the lists fetch
+  // itself failed, so we don't actually know the real state. Showing
+  // the same "create your first list" empty state here would look
+  // exactly like data loss - see ROOT_CAUSE_ANALYSIS.md.
+  if (listsError) {
+    return (
+      <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4">
+        <EmptyState
+          icon="⚠️"
+          title="לא ניתן לטעון את הרשימות"
+          description="אירעה שגיאה בטעינת הנתונים. הרשימות והפריטים שלך לא נמחקו - נסה/י שוב."
+          actionLabel="נסה שוב"
+          onAction={() => window.location.reload()}
+          size="lg"
+        />
+      </div>
+    );
   }
 
   if (!activeListId) {

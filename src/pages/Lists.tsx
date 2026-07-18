@@ -19,8 +19,18 @@ export default function Lists() {
   const { user } = useAuth();
   const { language } = useLanguage();
   const t = listsLabels[language as 'he' | 'en'];
-  const { lists, loading, activeListId, setActiveListId, createList, updateListName, setListArchived, deleteList } =
-    useActiveList();
+  const {
+    lists,
+    loading,
+    error,
+    activeListId,
+    setActiveListId,
+    createList,
+    updateListName,
+    setListArchived,
+    deleteList,
+    refetchLists,
+  } = useActiveList();
 
   const [newListName, setNewListName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -112,6 +122,17 @@ export default function Lists() {
           <Skeleton className="h-16 w-full rounded-xl" />
           <Skeleton className="h-16 w-full rounded-xl" />
         </div>
+      ) : error ? (
+        // Distinct from the genuine "you have zero lists" empty state
+        // below - this means the fetch itself failed, so we don't
+        // actually know how many lists exist. See ROOT_CAUSE_ANALYSIS.md.
+        <EmptyState
+          icon="⚠️"
+          title={t.loadErrorTitle}
+          description={t.loadErrorDescription}
+          actionLabel={t.retry}
+          onAction={() => refetchLists()}
+        />
       ) : lists.length === 0 ? (
         <EmptyState icon="🛍️" title={t.empty} />
       ) : (

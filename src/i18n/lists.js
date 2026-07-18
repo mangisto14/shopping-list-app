@@ -31,6 +31,9 @@ export const listsLabels = {
     genericError: 'משהו השתבש. נסה שוב.',
     ownerBadge: 'בעלים',
     memberBadge: 'חבר',
+    loadErrorTitle: 'לא ניתן לטעון את הרשימות',
+    loadErrorDescription: 'אירעה שגיאה בטעינת הנתונים. הרשימות שלך לא נמחקו - נסה/י שוב.',
+    retry: 'נסה שוב',
   },
   en: {
     title: 'My Lists',
@@ -64,5 +67,8 @@ export const listsLabels = {
     genericError: 'Something went wrong. Please try again.',
     ownerBadge: 'Owner',
     memberBadge: 'Member',
+    loadErrorTitle: "Couldn't load your lists",
+    loadErrorDescription: 'Something went wrong loading your data. Your lists have not been deleted - please try again.',
+    retry: 'Retry',
   },
 };
