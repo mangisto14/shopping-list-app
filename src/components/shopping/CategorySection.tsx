@@ -46,7 +46,20 @@ export default function CategorySection({ categoryName, count, expanded, onToggl
         </span>
       </button>
 
-      {expanded && <div className="flex flex-col gap-1 mt-1">{children}</div>}
+      {/* CSS grid-rows expand/collapse: animates smoothly without
+          measuring scrollHeight in JS. Children stay mounted while
+          collapsed (0fr row + overflow-hidden hides them) rather than
+          unmounting - trades a little always-in-DOM cost (fine at this
+          app's 100-item/20-category scale) for an animatable height. */}
+      <div
+        className="grid transition-[grid-template-rows] duration-200 ease-out"
+        style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
+        aria-hidden={!expanded}
+      >
+        <div className="overflow-hidden">
+          <div className="flex flex-col gap-1 mt-1">{children}</div>
+        </div>
+      </div>
     </div>
   );
 }

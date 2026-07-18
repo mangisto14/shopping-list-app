@@ -21,7 +21,7 @@ export const shoppingLabels = {
     emptyDescription: "הוסיפו פריט ראשון כדי להתחיל לקנות יחד",
     uncategorized: "ללא קטגוריה",
     addItemTitle: "הוספת פריט חדש",
-    addToListButton: "הוסף לרשימה המשותפת",
+    addToListButton: "הוסף לרשימה",
     categoryLabel: "קטגוריה",
   },
   en: {
@@ -46,7 +46,7 @@ export const shoppingLabels = {
     emptyDescription: "Add your first item to start shopping together",
     uncategorized: "Uncategorized",
     addItemTitle: "Add New Item",
-    addToListButton: "Add to shared list",
+    addToListButton: "Add to list",
     categoryLabel: "Category",
   },
 };

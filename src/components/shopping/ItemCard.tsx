@@ -173,8 +173,13 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
         <button
           onClick={onToggle}
           aria-label="toggle item"
-          className="flex-shrink-0 w-[22px] h-[22px] rounded-full border-2 border-green-500 bg-green-500 text-white flex items-center justify-center transition-all duration-200"
+          className="relative flex-shrink-0 w-[22px] h-[22px] rounded-full border-2 border-green-500 bg-green-500 text-white flex items-center justify-center transition-all duration-200"
         >
+          {/* Invisible hit-slop: expands the tappable area to ~44px
+              without growing the visible circle - a transparent child
+              positioned outside the button's own box still bubbles its
+              click up to this button. */}
+          <span className="absolute -inset-[11px]" aria-hidden="true" />
           <svg width="11" height="9" viewBox="0 0 12 10" fill="none" aria-hidden="true">
             <path d="M1.5 5.5L4.5 8.5L10.5 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -247,8 +252,10 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
         <button
           onClick={() => guardTap(onToggle)}
           aria-label="toggle item"
-          className="flex-shrink-0 w-[22px] h-[22px] rounded-full border-2 border-gray-300 hover:border-green-400 flex items-center justify-center transition-all duration-200"
-        />
+          className="relative flex-shrink-0 w-[22px] h-[22px] rounded-full border-2 border-gray-300 hover:border-green-400 flex items-center justify-center transition-all duration-200"
+        >
+          <span className="absolute -inset-[11px]" aria-hidden="true" />
+        </button>
 
         {isEditing ? (
           <input

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
@@ -60,6 +60,21 @@ function clusterByName(items: Item[]): ItemCluster[] {
   return [...clusters.values()];
 }
 
+const collapsedGroupsStorageKey = (listId: string) => `shopping-list:collapsedGroups:${listId}`;
+
+// Reads persisted collapse state for a list, defaulting to "everything
+// expanded" (empty set) if there's nothing stored yet, storage is
+// unavailable, or the stored value is corrupt.
+function readCollapsedGroups(listId: string | null): Set<string> {
+  if (!listId) return new Set();
+  try {
+    const raw = localStorage.getItem(collapsedGroupsStorageKey(listId));
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
 // Groups items by category, preserving the categories list's own order,
 // with any uncategorized items collected into a trailing group. Empty
 // groups are dropped - a category with nothing in this section (e.g. no
@@ -97,9 +112,23 @@ export default function ShoppingList() {
   const [showCreateListModal, setShowCreateListModal] = useState(false);
   // Collapsed category groups, keyed "todo:<categoryId|none>" /
   // "done:<categoryId|none>" so the same category can be independently
-  // collapsed in the active vs. completed sections. Default: everything
-  // expanded (nothing in the set).
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // collapsed in the active vs. completed sections. Persisted to
+  // localStorage per list, so a collapsed section stays collapsed
+  // across reloads/navigation. Default: everything expanded.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => readCollapsedGroups(activeListId));
+
+  // Reload persisted state when the active list itself changes (this
+  // page doesn't remount on a list switch) - a stale in-memory Set from
+  // the previous list would otherwise leak across lists.
+  useEffect(() => {
+    setCollapsedGroups(readCollapsedGroups(activeListId));
+  }, [activeListId]);
+
+  useEffect(() => {
+    if (!activeListId) return;
+    localStorage.setItem(collapsedGroupsStorageKey(activeListId), JSON.stringify([...collapsedGroups]));
+  }, [collapsedGroups, activeListId]);
+
   const toggleGroup = (key: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
