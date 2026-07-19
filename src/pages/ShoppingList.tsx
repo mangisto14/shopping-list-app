@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
@@ -35,6 +35,46 @@ interface CategoryGroup {
   items: Item[];
 }
 
+interface ItemCluster {
+  key: string;
+  representative: Item;
+  ids: string[];
+}
+
+// Groups items with an identical name into one displayed row ("Nx").
+// Deliberately keyed on exact name only - different names are never
+// merged, even within the same category. Each underlying row is still
+// its own `items` record; this is a display/interaction grouping layer
+// only, not a schema change. Order is preserved (first occurrence
+// order), so a cluster doesn't jump position when its count changes.
+function clusterByName(items: Item[]): ItemCluster[] {
+  const clusters = new Map<string, ItemCluster>();
+  for (const item of items) {
+    const existing = clusters.get(item.name);
+    if (existing) {
+      existing.ids.push(item.id);
+    } else {
+      clusters.set(item.name, { key: item.name, representative: item, ids: [item.id] });
+    }
+  }
+  return [...clusters.values()];
+}
+
+const collapsedGroupsStorageKey = (listId: string) => `shopping-list:collapsedGroups:${listId}`;
+
+// Reads persisted collapse state for a list, defaulting to "everything
+// expanded" (empty set) if there's nothing stored yet, storage is
+// unavailable, or the stored value is corrupt.
+function readCollapsedGroups(listId: string | null): Set<string> {
+  if (!listId) return new Set();
+  try {
+    const raw = localStorage.getItem(collapsedGroupsStorageKey(listId));
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
 // Groups items by category, preserving the categories list's own order,
 // with any uncategorized items collected into a trailing group. Empty
 // groups are dropped - a category with nothing in this section (e.g. no
@@ -59,7 +99,7 @@ export default function ShoppingList() {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const t = shoppingLabels[language as 'he' | 'en'];
-  const { lists: realLists, activeListId, setActiveListId, loading: listsLoading } = useActiveList();
+  const { lists: realLists, activeListId, setActiveListId, loading: listsLoading, error: listsError } = useActiveList();
 
   const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
   const { categories } = useCategories();
@@ -72,9 +112,23 @@ export default function ShoppingList() {
   const [showCreateListModal, setShowCreateListModal] = useState(false);
   // Collapsed category groups, keyed "todo:<categoryId|none>" /
   // "done:<categoryId|none>" so the same category can be independently
-  // collapsed in the active vs. completed sections. Default: everything
-  // expanded (nothing in the set).
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // collapsed in the active vs. completed sections. Persisted to
+  // localStorage per list, so a collapsed section stays collapsed
+  // across reloads/navigation. Default: everything expanded.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => readCollapsedGroups(activeListId));
+
+  // Reload persisted state when the active list itself changes (this
+  // page doesn't remount on a list switch) - a stale in-memory Set from
+  // the previous list would otherwise leak across lists.
+  useEffect(() => {
+    setCollapsedGroups(readCollapsedGroups(activeListId));
+  }, [activeListId]);
+
+  useEffect(() => {
+    if (!activeListId) return;
+    localStorage.setItem(collapsedGroupsStorageKey(activeListId), JSON.stringify([...collapsedGroups]));
+  }, [collapsedGroups, activeListId]);
+
   const toggleGroup = (key: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
@@ -131,16 +185,20 @@ export default function ShoppingList() {
   // Real lists enriched with the deterministic emoji and real
   // item_count from useLists.ts. No mock fallback: an empty realLists
   // array now renders as an honest empty list, not fabricated demo
-  // lists.
+  // lists. Archived lists are deliberately excluded here - the quick
+  // switcher is for actively-used lists; archived ones are only
+  // reachable (and restorable) from the Lists page.
   const displayLists: ListInfo[] = useMemo(
     () =>
-      realLists.map((l, i) => ({
-        id: l.id,
-        name: l.name,
-        emoji: EMOJI_PALETTE[i % EMOJI_PALETTE.length],
-        members: l.member_count,
-        items: l.item_count,
-      })),
+      realLists
+        .filter((l) => !l.archived)
+        .map((l, i) => ({
+          id: l.id,
+          name: l.name,
+          emoji: EMOJI_PALETTE[i % EMOJI_PALETTE.length],
+          members: l.member_count,
+          items: l.item_count,
+        })),
     [realLists]
   );
 
@@ -223,6 +281,25 @@ export default function ShoppingList() {
     return <PageSkeleton />;
   }
 
+  // Distinct from "you genuinely have zero lists": the lists fetch
+  // itself failed, so we don't actually know the real state. Showing
+  // the same "create your first list" empty state here would look
+  // exactly like data loss - see ROOT_CAUSE_ANALYSIS.md.
+  if (listsError) {
+    return (
+      <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4">
+        <EmptyState
+          icon="⚠️"
+          title="לא ניתן לטעון את הרשימות"
+          description="אירעה שגיאה בטעינת הנתונים. הרשימות והפריטים שלך לא נמחקו - נסה/י שוב."
+          actionLabel="נסה שוב"
+          onAction={() => window.location.reload()}
+          size="lg"
+        />
+      </div>
+    );
+  }
+
   if (!activeListId) {
     return (
       <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4">
@@ -233,6 +310,7 @@ export default function ShoppingList() {
 
   const renderGroup = (group: CategoryGroup, section: 'todo' | 'done') => {
     const key = `${section}:${group.categoryId ?? 'none'}`;
+    const clusters = clusterByName(group.items);
     return (
       <CategorySection
         key={key}
@@ -241,14 +319,21 @@ export default function ShoppingList() {
         expanded={!collapsedGroups.has(key)}
         onToggleExpanded={() => toggleGroup(key)}
       >
-        {group.items.map((item) => (
+        {clusters.map((cluster) => (
           <ItemCard
-            key={item.id}
-            item={item}
+            key={cluster.key}
+            item={cluster.representative}
+            count={cluster.ids.length}
             categoryName={group.categoryName ?? undefined}
-            onToggle={() => handleToggle(item)}
-            onDelete={() => deleteItem(item.id)}
-            onRename={renameItem}
+            onToggle={() => handleToggle(cluster.representative)}
+            // Swipe/tap delete on a grouped row is destructive: it
+            // removes every unit in the cluster, never just one - per
+            // explicit product decision, decreasing quantity is only
+            // done via the +/- controls below, not swipe-delete.
+            onDelete={() => cluster.ids.forEach((id) => deleteItem(id))}
+            onRename={(newName) => cluster.ids.forEach((id) => renameItem(id, newName))}
+            onIncrement={() => addItemToList(cluster.representative.name, cluster.representative.category_id)}
+            onDecrement={() => deleteItem(cluster.ids[cluster.ids.length - 1])}
           />
         ))}
       </CategorySection>

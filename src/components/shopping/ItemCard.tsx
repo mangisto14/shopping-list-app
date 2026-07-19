@@ -5,10 +5,22 @@ import { getCategoryStyle } from '../../theme/categoryStyles';
 
 interface ItemCardProps {
   item: Item;
+  // Number of identical-name units this row represents (see
+  // ShoppingList.tsx's clusterByName()). A plain, unclustered item is
+  // count === 1. `item` itself is always one representative unit from
+  // the cluster (its id/is_done/category_id), used for toggle/edit
+  // targeting - the cluster's other ids are handled by the callbacks
+  // below, not by this component.
+  count: number;
   categoryName?: string;
   onToggle: () => void;
   onDelete: () => void;
-  onRename: (id: string, newName: string) => void;
+  onRename: (newName: string) => void;
+  // Only meaningful (and only rendered) when count > 1 - lets the user
+  // adjust a grouped item's quantity without resorting to swipe-delete,
+  // which now always removes the *entire* group (see onDelete).
+  onIncrement?: () => void;
+  onDecrement?: () => void;
 }
 
 // Swipe-to-delete tuning. REVEAL is where the row snaps to when the user
@@ -21,20 +33,22 @@ const DELETE_THRESHOLD_PX = 180;
 const MAX_DRAG_PX = 220;
 const DELETE_ANIMATION_MS = 180;
 
-const ROW_SHAPE = 'bg-white rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_10px_rgba(15,23,42,0.05)] px-3 py-2';
+// min-h-[58px] keeps every row in the 56-64px target band regardless of
+// content, rather than letting padding alone (which varies with font
+// rendering) land outside it.
+const ROW_SHAPE = 'bg-white rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_10px_rgba(15,23,42,0.05)] px-3.5 py-2.5 min-h-[58px]';
 
 // Compact item row: category-color strip, checkbox, name, quantity. No
 // category badge, no "added by" attribution, no avatar - the design
 // spec for this pass calls all of that out explicitly as removed.
 //
-// "Quantity" always renders as "1x": `items` has no persisted quantity
-// column (the add-flow's quantity stepper controls how many separate
-// rows get inserted, not a per-row count - see ShoppingList.tsx's
-// addItem loop), so every row genuinely *is* one unit. Showing anything
-// else here would be fabricating a number the data doesn't have.
-const QUANTITY_LABEL = '1x';
+// Quantity is real, not fabricated: `items` still has no persisted
+// quantity column, but identical-name items are now clustered client-
+// side (ShoppingList.tsx's clusterByName()) and this row displays the
+// cluster's actual size as "Nx" - each unit is still its own row under
+// the hood, this is a display/interaction grouping only.
 
-export default function ItemCard({ item, categoryName, onToggle, onDelete, onRename }: ItemCardProps) {
+export default function ItemCard({ item, count, categoryName, onToggle, onDelete, onRename, onIncrement, onDecrement }: ItemCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(item.name);
   const [translateX, setTranslateX] = useState(0);
@@ -47,13 +61,14 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
   const dragStartTranslate = useRef(0);
   const pointerId = useRef<number | null>(null);
   const isScrollGesture = useRef(false);
+  const hasCaptured = useRef(false);
 
   const closeSwipe = () => setTranslateX(0);
 
   const handleSave = () => {
     const trimmed = name.trim();
     if (trimmed && trimmed !== item.name) {
-      onRename(item.id, trimmed);
+      onRename(trimmed);
     } else {
       setName(item.name);
     }
@@ -82,8 +97,20 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
     dragStartTranslate.current = translateX;
     pointerId.current = e.pointerId;
     isScrollGesture.current = false;
+    hasCaptured.current = false;
     setDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
+    // Deliberately NOT capturing the pointer here. Chromium retargets
+    // the synthetic `click` a tap produces to whichever element holds
+    // pointer capture at pointerup time - if this row (which has no
+    // onClick of its own) captures on every pointerdown unconditionally,
+    // a plain tap on the checkbox or name button underneath it never
+    // reaches their own onClick handlers at all, silently swallowing
+    // every tap (confirmed directly: this made the checkbox
+    // untoggleable via any real pointer-driven click, not just an e2e
+    // testing artifact). Capture is deferred to handlePointerMove,
+    // once actual drag movement is confirmed - a tap that never moves
+    // enough to count as a drag never captures the pointer, so its
+    // click reaches its real target normally.
   };
 
   const handlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -99,6 +126,15 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
       setDragging(false);
       setTranslateX(dragStartTranslate.current);
       return;
+    }
+
+    // Only once movement is large enough to be a real drag (matching
+    // endDrag's own "totalMovement < 4 is a tap" threshold) do we
+    // capture the pointer, so a fast drag that strays outside the row
+    // keeps tracking correctly without affecting plain taps.
+    if (!hasCaptured.current && (Math.abs(deltaX) >= 4 || Math.abs(deltaY) >= 4)) {
+      hasCaptured.current = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
     }
 
     const next = Math.min(MAX_DRAG_PX, Math.max(0, dragStartTranslate.current + deltaX));
@@ -159,8 +195,13 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
         <button
           onClick={onToggle}
           aria-label="toggle item"
-          className="flex-shrink-0 w-[22px] h-[22px] rounded-full border-2 border-green-500 bg-green-500 text-white flex items-center justify-center transition-all duration-200"
+          className="relative flex-shrink-0 w-[22px] h-[22px] rounded-full border-2 border-green-500 bg-green-500 text-white flex items-center justify-center transition-all duration-200"
         >
+          {/* Invisible hit-slop: expands the tappable area to ~44px
+              without growing the visible circle - a transparent child
+              positioned outside the button's own box still bubbles its
+              click up to this button. */}
+          <span className="absolute -inset-[11px]" aria-hidden="true" />
           <svg width="11" height="9" viewBox="0 0 12 10" fill="none" aria-hidden="true">
             <path d="M1.5 5.5L4.5 8.5L10.5 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -184,7 +225,7 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
           </button>
         )}
 
-        <span className="flex-shrink-0 text-[12px] font-medium text-gray-400 opacity-70">{QUANTITY_LABEL}</span>
+        <span className="flex-shrink-0 text-[12px] font-medium text-gray-400 opacity-70">{count}x</span>
       </li>
     );
   }
@@ -233,8 +274,10 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
         <button
           onClick={() => guardTap(onToggle)}
           aria-label="toggle item"
-          className="flex-shrink-0 w-[22px] h-[22px] rounded-full border-2 border-gray-300 hover:border-green-400 flex items-center justify-center transition-all duration-200"
-        />
+          className="relative flex-shrink-0 w-[22px] h-[22px] rounded-full border-2 border-gray-300 hover:border-green-400 flex items-center justify-center transition-all duration-200"
+        >
+          <span className="absolute -inset-[11px]" aria-hidden="true" />
+        </button>
 
         {isEditing ? (
           <input
@@ -254,7 +297,27 @@ export default function ItemCard({ item, categoryName, onToggle, onDelete, onRen
           </button>
         )}
 
-        <span className="flex-shrink-0 text-[12px] font-medium text-gray-500">{QUANTITY_LABEL}</span>
+        {count > 1 && onIncrement && onDecrement ? (
+          <div className="flex-shrink-0 flex items-center gap-1.5">
+            <button
+              onClick={() => guardTap(onDecrement)}
+              aria-label="הפחת כמות"
+              className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-xs font-bold flex items-center justify-center active:scale-90 transition-transform"
+            >
+              −
+            </button>
+            <span className="text-[12px] font-semibold text-gray-600 min-w-[18px] text-center">{count}x</span>
+            <button
+              onClick={() => guardTap(onIncrement)}
+              aria-label="הוסף כמות"
+              className="w-5 h-5 rounded-full bg-gray-100 text-blue-600 text-xs font-bold flex items-center justify-center active:scale-90 transition-transform"
+            >
+              +
+            </button>
+          </div>
+        ) : (
+          <span className="flex-shrink-0 text-[12px] font-medium text-gray-500">{count}x</span>
+        )}
       </div>
     </li>
   );
