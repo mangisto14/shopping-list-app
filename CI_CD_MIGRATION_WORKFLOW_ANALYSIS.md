@@ -86,3 +86,9 @@ Add two repository secrets (GitHub → Settings → Secrets and variables → Ac
 - `SUPABASE_DEV_DB_PASSWORD` — that project's database password.
 
 The moment both exist, `deploy-development` starts running on the next `develop` push that touches migrations - no other change to this file is needed.
+
+### Update — `shopping-list-dev` project created, job activated
+
+The second Supabase project now exists (`shopping-list-dev`, ref `wfattbxpmugzhqzqharc`), so the assumption above is resolved. `deploy-development`'s `secrets.SUPABASE_DEV_PROJECT_ID != ''` skip-guard has been removed — the job's `if:` now mirrors `deploy-production`'s exactly (`needs: validate`, gated only on branch/event). This was a deliberate trade-off flip from the "skip quietly" default described above: now that a real dev project exists, a missing secret should surface as a loud, actionable failure on the next `develop` push, not a silent skip that could be mistaken for "nothing to deploy."
+
+This repo change alone does not make migrations start flowing — it still depends on `SUPABASE_DEV_PROJECT_ID` and `SUPABASE_DEV_DB_PASSWORD` existing as repo secrets (see the README's secrets table) and on Supabase Auth cleanly bootstrapping this project from scratch (running every migration in `supabase/migrations/`, since it starts with no history). Those steps are outside what a repo-only change can do (GitHub secret values and Supabase project state aren't things a code change can create) and are called out as manual steps for whoever owns those two dashboards.

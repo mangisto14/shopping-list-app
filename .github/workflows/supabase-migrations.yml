@@ -156,32 +156,30 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**db push:** ${{ steps.push.outcome }}" >> "$GITHUB_STEP_SUMMARY"
 
-  # develop-branch counterpart to deploy-production, intended to target
-  # a SEPARATE Supabase project via its own secrets once one exists -
-  # never the same project `main` deploys to. There is only one
-  # Supabase project today, so this job is not wired to deploy anywhere
-  # yet: the `secrets.SUPABASE_DEV_PROJECT_ID != ''` guard below makes
-  # it skip cleanly (shows as "skipped", not a failure) on every
-  # develop push until that secret is actually created. This is
-  # deliberate - it keeps the job's shape ready for a future dev
-  # project without requiring any new secrets now, and without ever
-  # being able to fail loudly for a reason nobody can fix (a missing
-  # secret) or fall through to deploying against the wrong project.
+  # develop-branch counterpart to deploy-production, targeting a
+  # SEPARATE Supabase project (shopping-list-dev, ref
+  # wfattbxpmugzhqzqharc) - never the same project `main` deploys to.
+  # Mirrors deploy-production's shape exactly (same needs/if pattern,
+  # same link -> migration list -> db push sequence), just pointed at
+  # the dev project's own secrets so a push to develop can never touch
+  # production data.
   #
-  # To activate: create a second Supabase project, then add
-  # SUPABASE_DEV_PROJECT_ID and SUPABASE_DEV_DB_PASSWORD as repo
-  # secrets. No other change to this file is needed - the guard below
-  # flips on by itself the moment those secrets exist.
+  # Requires two repo secrets to actually run: SUPABASE_DEV_PROJECT_ID
+  # (set to wfattbxpmugzhqzqharc) and SUPABASE_DEV_DB_PASSWORD (the dev
+  # project's database password). Until both are set, this job fails
+  # loudly on the link step rather than silently deploying nowhere or
+  # against the wrong project - a missing secret should never look like
+  # a passing run.
   #
-  # SUPABASE_ACCESS_TOKEN is reused as-is (unconditionally): it
-  # authenticates the CLI to your Supabase account, not to a specific
-  # project, so the same token is correct for both jobs - only the
-  # project-ref and DB password differ per project.
+  # SUPABASE_ACCESS_TOKEN is reused as-is: it authenticates the CLI to
+  # your Supabase account, not to a specific project, so the same token
+  # is correct for both jobs - only the project-ref and DB password
+  # differ per project.
   deploy-development:
     name: Apply Supabase migrations (development)
     runs-on: ubuntu-latest
     needs: validate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop' && secrets.SUPABASE_DEV_PROJECT_ID != ''
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
