@@ -53,6 +53,7 @@ export default function FamilyMembers() {
         members={heroMembers}
         onInvite={() => setShowInviteModal(true)}
         inviteLabel="הזמנת בן משפחה"
+        showInvite={isOwner}
       />
 
       <p className="text-[13px] font-bold text-gray-500 px-1">חברים · {members.length}</p>

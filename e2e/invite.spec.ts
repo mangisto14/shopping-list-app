@@ -14,7 +14,10 @@ test.describe('Invite Member', () => {
     await page.goto('/family');
     await expect(page.locator('p.font-semibold', { hasText: 'owner@example.com' })).toBeVisible();
 
-    await page.getByText('הזמן חבר').click();
+    // FamilyMembers.tsx's invite trigger lives inside FamilyHeroCard now,
+    // labeled "הזמנת בן משפחה" - "הזמן חבר" was the pre-redesign copy and
+    // no longer exists anywhere on the page.
+    await page.getByText('הזמנת בן משפחה').click();
     await page.locator('input[type="email"]').fill('newmember@example.com');
     await page.getByRole('button', { name: /הוסף\/י/ }).click();
 
@@ -30,7 +33,10 @@ test.describe('Invite Member', () => {
     await mockInviteRpc(page, { errorCode: 'user_not_found' });
 
     await page.goto('/family');
-    await page.getByText('הזמן חבר').click();
+    // FamilyMembers.tsx's invite trigger lives inside FamilyHeroCard now,
+    // labeled "הזמנת בן משפחה" - "הזמן חבר" was the pre-redesign copy and
+    // no longer exists anywhere on the page.
+    await page.getByText('הזמנת בן משפחה').click();
     await page.locator('input[type="email"]').fill('nobody@example.com');
     await page.getByRole('button', { name: /הוסף\/י/ }).click();
 
@@ -54,7 +60,13 @@ test.describe('Invite Member', () => {
 
     await page.goto('/family');
     await expect(page.locator('p.font-semibold', { hasText: 'owner@example.com' })).toBeVisible();
-    await expect(page.getByText('הזמן חבר')).not.toBeVisible();
+    // Was asserting against "הזמן חבר", a string that no longer exists
+    // anywhere on the page regardless of role - that made this a false
+    // positive that never actually verified the invite button was
+    // hidden from non-owners. Fixed the real bug (FamilyHeroCard.tsx
+    // wasn't gating the invite button on `isOwner` at all) and this now
+    // asserts against the button's real, current label.
+    await expect(page.getByText('הזמנת בן משפחה')).not.toBeVisible();
     await expect(page.getByRole('button', { name: 'הסר חבר' })).toHaveCount(0);
   });
 });

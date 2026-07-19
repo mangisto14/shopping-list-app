@@ -9,15 +9,21 @@ test.describe('Create Category', () => {
 
     await page.goto('/categories');
 
-    const input = page.locator('#new-category-input');
-    await expect(input).toBeVisible();
-    await input.fill('ירקות ופירות');
-    await page.getByRole('button', { name: 'הוסף', exact: true }).click();
+    // Categories page was redesigned into a card grid with category
+    // creation behind a bottom sheet (CategorySheet.tsx) - there is no
+    // always-visible inline input anymore. `exact: true` avoids matching
+    // the empty-state's own "קטגוריה חדשה" action button, which also
+    // contains the substring "חדשה".
+    await page.getByRole('button', { name: 'חדשה', exact: true }).click();
 
-    // The category name renders inside an editable <input value>, not
-    // as plain text - getByText() can't see input values, so this
-    // checks the value directly instead.
-    await expect(page.locator('ul li input').first()).toHaveValue('ירקות ופירות');
+    const sheet = page.getByTestId('bottom-sheet');
+    await expect(sheet.getByText('קטגוריה חדשה')).toBeVisible();
+
+    await sheet.getByPlaceholder('שם הקטגוריה').fill('ירקות ופירות');
+    await sheet.getByRole('button', { name: 'שמירה' }).click();
+
+    // The category name renders as plain text inside a CategoryCard now.
+    await expect(page.getByText('ירקות ופירות')).toBeVisible();
   });
 
   test('empty category list shows a proper empty state, not a blank screen', async ({ page }) => {
