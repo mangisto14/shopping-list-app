@@ -300,7 +300,7 @@ export default function ShoppingList() {
           chrome row above this page, so this page's total height plus
           that row equals exactly the viewport height - no outer/page-
           level scroll competing with the inner list scroll. */}
-      <div className="flex-shrink-0 pt-2">
+      <div className="flex-shrink-0 pt-1">
         <ListSwitcher
           lists={displayLists}
           activeList={activeList}
@@ -308,7 +308,7 @@ export default function ShoppingList() {
           onCreateNew={() => setShowCreateListModal(true)}
         />
 
-        <div className="mt-1.5">
+        <div className="mt-1">
           <ShoppingHeader
             title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
             subtitle={t.subtitle}
@@ -318,7 +318,7 @@ export default function ShoppingList() {
           />
         </div>
 
-        <div className="mt-1.5">
+        <div className="mt-1">
           <QuickAddBar
             value={input}
             onChange={setInput}
