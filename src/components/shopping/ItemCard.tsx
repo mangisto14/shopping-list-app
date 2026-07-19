@@ -61,6 +61,7 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
   const dragStartTranslate = useRef(0);
   const pointerId = useRef<number | null>(null);
   const isScrollGesture = useRef(false);
+  const hasCaptured = useRef(false);
 
   const closeSwipe = () => setTranslateX(0);
 
@@ -96,8 +97,20 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
     dragStartTranslate.current = translateX;
     pointerId.current = e.pointerId;
     isScrollGesture.current = false;
+    hasCaptured.current = false;
     setDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
+    // Deliberately NOT capturing the pointer here. Chromium retargets
+    // the synthetic `click` a tap produces to whichever element holds
+    // pointer capture at pointerup time - if this row (which has no
+    // onClick of its own) captures on every pointerdown unconditionally,
+    // a plain tap on the checkbox or name button underneath it never
+    // reaches their own onClick handlers at all, silently swallowing
+    // every tap (confirmed directly: this made the checkbox
+    // untoggleable via any real pointer-driven click, not just an e2e
+    // testing artifact). Capture is deferred to handlePointerMove,
+    // once actual drag movement is confirmed - a tap that never moves
+    // enough to count as a drag never captures the pointer, so its
+    // click reaches its real target normally.
   };
 
   const handlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -113,6 +126,15 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
       setDragging(false);
       setTranslateX(dragStartTranslate.current);
       return;
+    }
+
+    // Only once movement is large enough to be a real drag (matching
+    // endDrag's own "totalMovement < 4 is a tap" threshold) do we
+    // capture the pointer, so a fast drag that strays outside the row
+    // keeps tracking correctly without affecting plain taps.
+    if (!hasCaptured.current && (Math.abs(deltaX) >= 4 || Math.abs(deltaY) >= 4)) {
+      hasCaptured.current = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
     }
 
     const next = Math.min(MAX_DRAG_PX, Math.max(0, dragStartTranslate.current + deltaX));

@@ -62,7 +62,7 @@ export default function QuickAddBar({
         />
         <button
           onClick={onSubmit}
-          aria-label="add item"
+          aria-label="quick add"
           className="flex-shrink-0 w-11 h-11 rounded-[14px] bg-blue-600 text-white shadow-[0_6px_14px_rgba(37,99,235,0.35)] active:scale-95 transition-all flex items-center justify-center text-2xl font-light"
         >
           +

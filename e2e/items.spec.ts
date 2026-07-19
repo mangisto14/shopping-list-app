@@ -20,7 +20,7 @@ test.describe('Create Item', () => {
 
     await sheet.getByPlaceholder('הוסף פריט...').fill('חלב 3%');
     await sheet.getByRole('button', { name: /מוצרי חלב/ }).click();
-    await sheet.getByRole('button', { name: /^הוסף לרשימה$/ }).click();
+    await sheet.getByRole('button', { name: /הוסף לרשימה/ }).click();
 
     await expect(page.getByText('חלב 3%')).toBeVisible();
   });
