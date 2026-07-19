@@ -8,15 +8,17 @@ on:
     branches:
       - main
       - develop
+      - claude/shopping-list-dev-supabase-i9lzi1
     paths:
       - "supabase/migrations/**"
 
 # Avoid two migration runs applying concurrently if pushes land close
 # together - queue behind the in-flight run rather than cancel it,
 # since cancelling mid-`db push` could leave a database half-migrated.
-# One shared group across both branches is intentional: main and
-# develop target different projects, but serializing every run (rather
-# than letting a main and a develop run race each other) keeps this
+# One shared group across all three branches is intentional: main
+# targets production while develop and claude/shopping-list-dev-supabase-i9lzi1
+# both target the dev project, but serializing every run (rather than
+# letting runs from different branches race each other) keeps this
 # workflow's own step-summary/log ordering simple and costs nothing -
 # these deploys are infrequent, not latency-sensitive.
 concurrency:
@@ -164,6 +166,13 @@ jobs:
   # the dev project's own secrets so a push to develop can never touch
   # production data.
   #
+  # Also runs on claude/shopping-list-dev-supabase-i9lzi1 - the active
+  # feature branch doing the Supabase dev-environment setup work itself
+  # - so migrations land on the dev project as soon as they're pushed
+  # there, without needing an intermediate merge to develop first. Both
+  # branches target the same dev project via the same secrets; neither
+  # one ever touches production.
+  #
   # Requires two repo secrets to actually run: SUPABASE_DEV_PROJECT_ID
   # (set to wfattbxpmugzhqzqharc) and SUPABASE_DEV_DB_PASSWORD (the dev
   # project's database password). Until both are set, this job fails
@@ -179,7 +188,10 @@ jobs:
     name: Apply Supabase migrations (development)
     runs-on: ubuntu-latest
     needs: validate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/develop' ||
+       github.ref == 'refs/heads/claude/shopping-list-dev-supabase-i9lzi1')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
