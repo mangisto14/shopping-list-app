@@ -55,12 +55,34 @@ Both were committed on the `claude/app-design-branch-8hyo9t` feature branch, the
 
 YAML validated with `python3 -c "import yaml; yaml.safe_load(...)"` — well-formed. No app code touched (`tsc`/`build`/`lint` all still clean, as expected for a workflow-only change).
 
-### Required next step (yours — I cannot do this)
+### Update — confirmed: only one Supabase project exists today
 
-For `deploy-development` to actually run instead of failing on link, add two new repository secrets (GitHub → Settings → Secrets and variables → Actions):
-- `SUPABASE_DEV_PROJECT_ID` — the project ref of your **development** Supabase project (not the one `main` deploys to).
+The user confirmed there is currently a single Supabase project, with no separate development project. The section above described the original assumption (a separate dev project); this section supersedes it.
+
+**Change made:** `deploy-development`'s `if:` condition now includes `&& secrets.SUPABASE_DEV_PROJECT_ID != ''`. Since that secret does not exist, the job **skips** (shows as gray/"skipped" in the Actions UI) on every push to `develop` — it no longer runs, and it no longer fails. `deploy-production` (the `main` path) is completely untouched by this change.
+
+### What this means for continuing safely right now
+
+- **Migrations merged into `develop` are validated** (the `validate` job still runs on every push to `develop` that touches `supabase/migrations/**`, spinning up a throwaway local Postgres/GoTrue/PostgREST stack via Docker - no secrets, no real project involved) but **are not automatically applied anywhere**.
+- **The only way migrations reach your real (single) Supabase project remains merging into `main`** - exactly how it already worked before any of this investigation started. Nothing about how you actually ship a migration today has changed.
+- **This is not a regression** relative to before this investigation: before, `develop` pushes didn't trigger the workflow at all; now they trigger `validate` (a pure safety net, catches bad SQL early) and a `deploy-development` job that's present but inert.
+
+### Trade-offs of this approach vs. the alternative (reusing the single project for both branches)
+
+| | **Skip `deploy-development` until a real dev secret exists (implemented)** | **Point `deploy-development` at the same single project `main` uses** |
+|---|---|---|
+| Risk to the one real database | None from `develop` - only `main` merges can ever touch it, same as before | Every push to `develop` that touches migrations applies immediately, ahead of (and independent from) any merge to `main` |
+| "Ready for the future" | Yes - adding 2 secrets later is the entire activation step, no workflow edit needed | N/A - would need to be manually re-pointed later if a real dev project is ever introduced |
+| Feedback speed on new migrations | Slower - migrations only take effect once merged to `main` | Faster - migrations take effect the moment they land on `develop`, before "release" |
+| Meaning of `develop` as an integration branch | Preserved - `develop` stays a pre-production review point, matching the main/develop/feature model you set up | Weakened - `develop` and `main` behave as the same environment for schema purposes, even though app code still forks between them |
+| Failure mode if misconfigured | Job skips quietly - very safe, but could be mistaken for "nothing to deploy" if someone forgets why | None to misconfigure (reuses working secrets), but a bad/experimental migration merged to `develop` hits the real database immediately, before anyone decided it was ready for `main` |
+
+I implemented the left column as the minimal, safe default consistent with "do not assume a separate development database exists" and "do not modify production deployment behavior." If you'd rather have `develop` deploy immediately to the single project (the right column), say so explicitly and I'll point `deploy-development` at `SUPABASE_PROJECT_ID`/`SUPABASE_DB_PASSWORD` instead of the `_DEV_` pair - that's a one-line change, not a redesign, since the job shape is already in place.
+
+### Required next step to fully activate (only if/when a second project is created)
+
+Add two repository secrets (GitHub → Settings → Secrets and variables → Actions):
+- `SUPABASE_DEV_PROJECT_ID` — the project ref of a future development Supabase project.
 - `SUPABASE_DEV_DB_PASSWORD` — that project's database password.
 
-Once those exist, the very next push to `develop` that touches `supabase/migrations/**` will apply `20260718090000` and `20260718100000` (and any future migration) automatically — this becomes the single source of truth you asked for, with no manual `db push` ever needed again for `develop`.
-
-If it turns out there's actually only one Supabase project today (no separate dev project exists yet), tell me and I'll adjust `deploy-development` to point at the same project `main` uses instead — but I did not default to that, since it would mean every `develop` merge immediately mutates production.
+The moment both exist, `deploy-development` starts running on the next `develop` push that touches migrations - no other change to this file is needed.
