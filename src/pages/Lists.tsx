@@ -7,6 +7,7 @@ import { listsLabels } from '../i18n/lists';
 import EmptyState from '../components/ui/EmptyState';
 import Skeleton from '../components/ui/Skeleton';
 import ListActionsSheet from '../components/lists/ListActionsSheet';
+import DebugReportPanel from '../components/DebugReportPanel'; // TEMP DEBUG - not committed
 import type { ShoppingListSummary } from '../hooks/useLists';
 
 // Same deterministic, positional fallback emoji used by ShoppingList.tsx's
@@ -23,6 +24,7 @@ export default function Lists() {
     lists,
     loading,
     error,
+    debugReportText, // TEMP DEBUG - not committed
     activeListId,
     setActiveListId,
     createList,
@@ -126,13 +128,17 @@ export default function Lists() {
         // Distinct from the genuine "you have zero lists" empty state
         // below - this means the fetch itself failed, so we don't
         // actually know how many lists exist. See ROOT_CAUSE_ANALYSIS.md.
-        <EmptyState
-          icon="⚠️"
-          title={t.loadErrorTitle}
-          description={t.loadErrorDescription}
-          actionLabel={t.retry}
-          onAction={() => refetchLists()}
-        />
+        <>
+          <EmptyState
+            icon="⚠️"
+            title={t.loadErrorTitle}
+            description={t.loadErrorDescription}
+            actionLabel={t.retry}
+            onAction={() => refetchLists()}
+          />
+          {/* TEMP DEBUG - not committed. */}
+          <DebugReportPanel reportText={debugReportText} fallbackMessage={error ?? '(none)'} />
+        </>
       ) : lists.length === 0 ? (
         <EmptyState icon="🛍️" title={t.empty} />
       ) : (

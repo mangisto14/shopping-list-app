@@ -22,6 +22,7 @@ import type { ListInfo } from '../components/lists/ListCard';
 import CategoryChip from '../components/ui/CategoryChip';
 import EmptyState from '../components/ui/EmptyState';
 import { PageSkeleton } from '../components/ui/Skeleton';
+import DebugReportPanel from '../components/DebugReportPanel'; // TEMP DEBUG - not committed
 
 // Deterministic fallback emoji per list, since the real `lists` table
 // has no emoji column (adding one is a schema change, out of scope
@@ -99,7 +100,7 @@ export default function ShoppingList() {
   const { language } = useLanguage();
   const navigate = useNavigate();
   const t = shoppingLabels[language as 'he' | 'en'];
-  const { lists: realLists, activeListId, setActiveListId, loading: listsLoading, error: listsError } = useActiveList();
+  const { lists: realLists, activeListId, setActiveListId, loading: listsLoading, error: listsError, debugReportText } = useActiveList(); // debugReportText: TEMP DEBUG, not committed
 
   const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
   const { categories } = useCategories();
@@ -296,6 +297,8 @@ export default function ShoppingList() {
           onAction={() => window.location.reload()}
           size="lg"
         />
+        {/* TEMP DEBUG - not committed. */}
+        <DebugReportPanel reportText={debugReportText} fallbackMessage={listsError ?? '(none)'} />
       </div>
     );
   }

@@ -33,18 +33,42 @@ export function useLists() {
   // function never clears it on error), but that alone isn't visible
   // to a caller that only looks at `lists.length === 0`.
   const [error, setError] = useState<string | null>(null);
+  // TEMP DEBUG - not committed, will be removed once the lists-loading
+  // failure is root-caused. A single structured snapshot (not scattered
+  // console.log calls) so ActiveListContext.tsx can assemble one
+  // consolidated debug report (it also knows activeListId/route/env,
+  // which this hook deliberately doesn't).
+  const [debugSnapshot, setDebugSnapshot] = useState<any>(null);
 
   const fetchLists = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+
+    const SELECT = 'id, name, owner_id, created_at, archived, list_members(count), items(count)';
     // items(count) mirrors the existing list_members(count) embed - a
     // purely additive read, not a change to any CRUD operation. Lets
     // the list switcher show real per-list item counts instead of a
     // guess, without adding a new query anywhere.
-    const { data, error: fetchError } = await supabase
+    const response = await supabase
       .from('lists')
-      .select('id, name, owner_id, created_at, archived, list_members(count), items(count)')
+      .select(SELECT)
       .order('created_at', { ascending: true });
+    const { data, error: fetchError, status, statusText } = response;
+
+    // TEMP DEBUG - snapshot only, no printing here (see ActiveListContext.tsx)
+    setDebugSnapshot({
+      timestamp: new Date().toISOString(),
+      userId: user.id,
+      supabaseUrl: (supabase as any).supabaseUrl ?? import.meta.env.VITE_SUPABASE_URL ?? null,
+      table: 'lists',
+      select: SELECT,
+      filters: "order: created_at ascending (no eq/filter clauses - RLS scopes rows to the caller)",
+      status,
+      statusText,
+      error: fetchError ? { code: fetchError.code, message: fetchError.message, details: fetchError.details, hint: fetchError.hint } : null,
+      rawResponse: response,
+    });
+    // END TEMP DEBUG
 
     if (fetchError || !data) {
       console.error('useLists: failed to fetch lists', fetchError);
@@ -145,5 +169,5 @@ export function useLists() {
     return true;
   }
 
-  return { lists, loading, error, createList, updateListName, setListArchived, deleteList, refetch: fetchLists };
+  return { lists, loading, error, debugSnapshot, createList, updateListName, setListArchived, deleteList, refetch: fetchLists };
 }
