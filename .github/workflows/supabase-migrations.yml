@@ -1,6 +1,8 @@
 name: Supabase Migrations
 
 on:
+  workflow_dispatch:
+on:
   pull_request:
     paths:
       - "supabase/migrations/**"
