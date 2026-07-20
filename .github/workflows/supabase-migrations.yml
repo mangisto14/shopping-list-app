@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - "supabase/migrations/**"
+      - ".github/workflows/supabase-migrations.yml"
   push:
     branches:
       - main
