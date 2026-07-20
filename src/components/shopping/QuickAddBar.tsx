@@ -50,8 +50,8 @@ export default function QuickAddBar({
   const style = getCategoryStyle(selectedCategoryLabel);
 
   return (
-    <div className="bg-white rounded-[18px] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)] p-3 flex flex-col gap-2.5">
-      <div className="flex items-center gap-2.5">
+    <div className="bg-white rounded-[18px] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)] p-2.5 flex flex-col gap-2">
+      <div className="flex items-center gap-2">
         <input
           type="text"
           value={value}
