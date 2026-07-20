@@ -15,6 +15,7 @@ on:
       - claude/shopping-list-dev-supabase-i9lzi1
     paths:
       - "supabase/migrations/**"
+      - ".github/workflows/supabase-migrations.yml"
 
 # Avoid two migration runs applying concurrently if pushes land close
 # together - queue behind the in-flight run rather than cancel it,
