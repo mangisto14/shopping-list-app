@@ -346,6 +346,7 @@ export default function ShoppingList() {
               label={t.allCategories}
               active={selectedCategory === 'all'}
               onClick={() => setSelectedCategory('all')}
+              variant="filter"
             />
             {categories.map((cat) => {
               const style = getCategoryStyle(cat.name);
@@ -357,6 +358,7 @@ export default function ShoppingList() {
                   active={selectedCategory === cat.id}
                   activeClassName={style.fill}
                   onClick={() => setSelectedCategory(cat.id)}
+                  variant="filter"
                 />
               );
             })}
