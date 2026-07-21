@@ -33,10 +33,10 @@ const DELETE_THRESHOLD_PX = 180;
 const MAX_DRAG_PX = 220;
 const DELETE_ANIMATION_MS = 180;
 
-// min-h-[58px] keeps every row in the 56-64px target band regardless of
+// min-h-[52px] keeps every row in the 50-56px target band regardless of
 // content, rather than letting padding alone (which varies with font
 // rendering) land outside it.
-const ROW_SHAPE = 'bg-white rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_10px_rgba(15,23,42,0.05)] px-3.5 py-2.5 min-h-[58px]';
+const ROW_SHAPE = 'bg-white rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_10px_rgba(15,23,42,0.05)] px-3 py-2 min-h-[52px]';
 
 // Compact item row: category-color strip, checkbox, name, quantity. No
 // category badge, no "added by" attribution, no avatar - the design
