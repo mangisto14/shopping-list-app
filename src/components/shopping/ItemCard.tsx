@@ -24,6 +24,11 @@ interface ItemCardProps {
   // which now always removes the *entire* group (see onDelete).
   onIncrement?: () => void;
   onDecrement?: () => void;
+  // Only ever true for one row at a time (the first rendered shopping
+  // item in the list) - ShoppingList.tsx decides which, this component
+  // just plays the hint when told to. Defaults to false so every other
+  // row stays silent.
+  playEntryHint?: boolean;
 }
 
 // Swipe-to-delete tuning. REVEAL is where the row snaps to when the user
@@ -57,8 +62,12 @@ function prefersReducedMotion() {
 
 // min-h-[52px] keeps every row in the 50-56px target band regardless of
 // content, rather than letting padding alone (which varies with font
-// rendering) land outside it.
-const ROW_BASE = 'bg-white rounded-xl px-3 py-2 min-h-[52px]';
+// rendering) land outside it. The border makes the row read as a
+// complete, self-contained card rather than just a flat colored block -
+// it's part of the card element itself, so it moves with the card and
+// stays visible for the entire swipe, never interrupted by the delete
+// layer underneath.
+const ROW_BASE = 'bg-white rounded-xl px-3 py-2 min-h-[52px] border border-gray-100';
 const ROW_SHADOW_REST = 'shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_10px_rgba(15,23,42,0.05)]';
 const ROW_SHADOW_DRAG = 'shadow-[0_3px_6px_rgba(15,23,42,0.08),0_10px_24px_rgba(15,23,42,0.12)]';
 
@@ -72,7 +81,7 @@ const ROW_SHADOW_DRAG = 'shadow-[0_3px_6px_rgba(15,23,42,0.08),0_10px_24px_rgba(
 // cluster's actual size as "Nx" - each unit is still its own row under
 // the hood, this is a display/interaction grouping only.
 
-export default function ItemCard({ item, count, categoryName, onToggle, onDelete, onRename, onIncrement, onDecrement }: ItemCardProps) {
+export default function ItemCard({ item, count, categoryName, onToggle, onDelete, onRename, onIncrement, onDecrement, playEntryHint = false }: ItemCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(item.name);
   const [translateX, setTranslateX] = useState(0);
@@ -102,10 +111,11 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
   };
 
   // One-time entry hint: reveal the swipe affordance briefly, then
-  // settle back. Skipped entirely for completed rows (no swipe there)
-  // and under reduced-motion.
+  // settle back. Only plays when the parent asks for it (the first
+  // rendered row) - skipped for every other row, for completed rows (no
+  // swipe there), and under reduced-motion.
   useEffect(() => {
-    if (item.is_done || prefersReducedMotion()) return;
+    if (!playEntryHint || item.is_done || prefersReducedMotion()) return;
 
     const delayTimer = window.setTimeout(() => {
       setHinting(true);

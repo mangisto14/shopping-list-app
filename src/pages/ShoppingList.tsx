@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import UndoSnackbar from '../components/shopping/UndoSnackbar';
+import DemoItemRow from '../components/shopping/DemoItemRow';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
@@ -320,17 +321,25 @@ export default function ShoppingList() {
 
   const totalItems = items.length;
 
-  // Fade the empty state in on mount rather than snapping straight to
-  // it - most noticeable when the last category's last item is
-  // swipe-deleted and the whole list bottoms out to empty.
+  // When the list is empty, a one-time non-interactive DemoItemRow plays
+  // the swipe-discovery animation first, then fades out before the real
+  // empty state appears. Resets whenever the list goes from non-empty
+  // back to empty, so the demo plays fresh each time that happens.
+  const [demoRowDone, setDemoRowDone] = useState(false);
+  useEffect(() => {
+    if (visibleItems.length > 0) setDemoRowDone(false);
+  }, [visibleItems.length]);
+
+  // Fade the empty state in once the demo row (if any) has finished,
+  // rather than snapping straight to it.
   const [emptyStateVisible, setEmptyStateVisible] = useState(false);
   useEffect(() => {
-    if (visibleItems.length === 0) {
+    if (visibleItems.length === 0 && demoRowDone) {
       const id = requestAnimationFrame(() => setEmptyStateVisible(true));
       return () => cancelAnimationFrame(id);
     }
     setEmptyStateVisible(false);
-  }, [visibleItems.length]);
+  }, [visibleItems.length, demoRowDone]);
 
   if (listsLoading) {
     return <PageSkeleton />;
@@ -372,7 +381,13 @@ export default function ShoppingList() {
   // its last item is soft-deleted. The wrapper stays structurally
   // identical (same key, same div) whether live or closing, so React
   // reuses the DOM node and the opacity change actually transitions.
-  const renderGroup = (group: CategoryGroup, section: 'todo' | 'done', closing = false) => {
+  // `firstGroup` marks the very first to-buy group, so its very first
+  // cluster is "the first rendered shopping item in the list" - the one
+  // and only row that plays the discovery animation. No other lookup or
+  // expand-state check involved - if that group happens to be
+  // collapsed, its rows (and the hint) simply never mount, which is
+  // fine.
+  const renderGroup = (group: CategoryGroup, section: 'todo' | 'done', closing = false, firstGroup = false) => {
     const key = `${section}:${group.categoryId ?? 'none'}`;
     const clusters = closing ? [] : clusterByName(group.items);
     return (
@@ -383,7 +398,7 @@ export default function ShoppingList() {
           expanded={!closing && !collapsedGroups.has(key)}
           onToggleExpanded={() => toggleGroup(key)}
         >
-          {clusters.map((cluster) => (
+          {clusters.map((cluster, index) => (
             <ItemCard
               key={cluster.key}
               item={cluster.representative}
@@ -394,6 +409,7 @@ export default function ShoppingList() {
               onRename={(newName) => cluster.ids.forEach((id) => renameItem(id, newName))}
               onIncrement={() => addItemToList(cluster.representative.name, cluster.representative.category_id)}
               onDecrement={() => deleteItem(cluster.ids[cluster.ids.length - 1])}
+              playEntryHint={firstGroup && index === 0}
             />
           ))}
         </CategorySection>
@@ -496,19 +512,23 @@ export default function ShoppingList() {
         style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom) + 16px)' }}
       >
         {visibleItems.length === 0 ? (
-          <div className={`transition-opacity duration-300 ${emptyStateVisible ? 'opacity-100' : 'opacity-0'}`}>
-            <EmptyState
-              icon="🛒"
-              title={t.empty}
-              description={t.emptyDescription}
-              actionLabel={t.addItemTitle}
-              onAction={openAddForm}
-              size="lg"
-            />
-          </div>
+          !demoRowDone ? (
+            <DemoItemRow label="חלב 3%" onFinished={() => setDemoRowDone(true)} />
+          ) : (
+            <div className={`transition-opacity duration-300 ${emptyStateVisible ? 'opacity-100' : 'opacity-0'}`}>
+              <EmptyState
+                icon="🛒"
+                title={t.empty}
+                description={t.emptyDescription}
+                actionLabel={t.addItemTitle}
+                onAction={openAddForm}
+                size="lg"
+              />
+            </div>
+          )
         ) : (
           <div className="flex flex-col gap-2.5">
-            {toBuyGroups.map((group) => renderGroup(group, 'todo'))}
+            {toBuyGroups.map((group, index) => renderGroup(group, 'todo', false, index === 0))}
             {renderClosingGroups('todo', toBuyGroups)}
 
             {(doneGroups.length > 0 || closingDoneGroups.length > 0) && (
