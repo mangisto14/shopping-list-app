@@ -428,16 +428,19 @@ export default function ShoppingList() {
 
   return (
     <div
-      className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 flex flex-col"
+      className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 flex flex-col overflow-hidden"
       style={{ height: 'calc(100dvh - 3rem)' }}
     >
-      {/* Fixed top region: list switcher, header, quick-add, category
-          filters. None of this scrolls - only the item list below does
-          (see the flex-1 overflow-y-auto container). `calc(100dvh -
-          3rem)` on the outer wrapper accounts for App.jsx's own h-12
-          chrome row above this page, so this page's total height plus
-          that row equals exactly the viewport height - no outer/page-
-          level scroll competing with the inner list scroll. */}
+      {/* Single sticky Top Panel: list switcher, header (title +
+          member/item-count stats), quick-add, category filter chips.
+          These render together as one flex-shrink-0 block - none of
+          them are individually sticky/positioned, they just never enter
+          the scrollable region below. `calc(100dvh - 3rem)` + explicit
+          overflow-hidden on this page container accounts for App.jsx's
+          own h-12 chrome row above this page, so this container's
+          height plus that row always exactly fills the viewport - the
+          only scrolling region in the whole app is the <main> item list
+          below, never this page container or the document itself. */}
       <div className="flex-shrink-0 pt-1">
         <ListSwitcher
           lists={displayLists}
@@ -504,10 +507,10 @@ export default function ShoppingList() {
         )}
       </div>
 
-      {/* Only this region scrolls. Bottom padding clears the fixed
-          BottomNav (h-16 + safe-area-inset-bottom) so the last row is
-          never hidden behind it. */}
-      <div
+      {/* The one and only scrolling region in the app. Bottom padding
+          clears the fixed BottomNav (h-16 + safe-area-inset-bottom) so
+          the last row is never hidden behind it. */}
+      <main
         className="flex-1 overflow-y-auto min-h-0 pt-3"
         style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom) + 16px)' }}
       >
@@ -546,7 +549,7 @@ export default function ShoppingList() {
             )}
           </div>
         )}
-      </div>
+      </main>
 
       <AddItemSheet
         open={showAddForm}
