@@ -347,7 +347,7 @@ export default function ShoppingList() {
 
   if (!activeListId) {
     return (
-      <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 pt-4">
+      <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto  sm:px-4 pt-4">
         <EmptyListsState onCreateFirst={() => navigate('/lists')} />
       </div>
     );
@@ -428,7 +428,7 @@ export default function ShoppingList() {
 
   return (
     <div
-      className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto px-3 sm:px-4 flex flex-col overflow-hidden"
+      className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto  sm:px-4 flex flex-col overflow-hidden"
       style={{ height: 'calc(100dvh - 3rem)' }}
     >
       {/* Single sticky Top Panel: list switcher, header (title +
