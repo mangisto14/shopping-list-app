@@ -1,5 +1,6 @@
 // src/components/ui/BottomSheet.tsx
 import { useEffect, useState, type ReactNode } from 'react';
+import { useDeveloperConsole } from '../../config/DeveloperConsoleContext';
 
 interface BottomSheetProps {
   open: boolean;
@@ -36,6 +37,7 @@ const HEIGHT_FRACTION = 0.75; // 72-75vh target from the design spec
 // `visualViewport` isn't available (older browsers) - progressive
 // enhancement, not a requirement.
 export default function BottomSheet({ open, onClose, title, children, footer }: BottomSheetProps) {
+  const { animations } = useDeveloperConsole();
   const [visible, setVisible] = useState(false);
   const [viewport, setViewport] = useState<{ height: number; offsetTop: number } | null>(null);
 
@@ -76,17 +78,20 @@ export default function BottomSheet({ open, onClose, title, children, footer }: 
 
   return (
     <div
-      className={`fixed left-0 right-0 z-[60] flex items-end sm:items-center justify-center overflow-hidden bg-black/40 transition-opacity duration-[250ms] ${
+      className={`fixed left-0 right-0 z-[60] flex items-end sm:items-center justify-center overflow-hidden bg-black/40 transition-opacity ${
         viewport ? '' : 'top-0 bottom-0'
       } ${visible ? 'opacity-100' : 'opacity-0'}`}
-      style={viewport ? { top: viewport.offsetTop, height: viewport.height } : undefined}
+      style={{
+        transitionDuration: `${animations.bottomSheetDuration}ms`,
+        ...(viewport ? { top: viewport.offsetTop, height: viewport.height } : undefined),
+      }}
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         data-testid="bottom-sheet"
-        style={{ maxHeight }}
-        className={`relative w-full sm:max-w-md bg-white rounded-t-[24px] sm:rounded-[24px] shadow-lg flex flex-col overflow-hidden transition-all duration-[250ms] ease-out ${
+        style={{ maxHeight, transitionDuration: `${animations.bottomSheetDuration}ms` }}
+        className={`relative w-full sm:max-w-md bg-white rounded-t-[24px] sm:rounded-[24px] shadow-lg flex flex-col overflow-hidden transition-all ease-out ${
           visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
         }`}
       >

@@ -1,6 +1,7 @@
 // src/components/shopping/CategorySection.tsx
 import type { ReactNode } from 'react';
 import { getCategoryStyle } from '../../theme/categoryStyles';
+import { useDeveloperConsole } from '../../config/DeveloperConsoleContext';
 
 interface CategorySectionProps {
   categoryName: string | null; // null = uncategorized
@@ -17,6 +18,7 @@ interface CategorySectionProps {
 // component stays purely about the group chrome/collapse behavior.
 export default function CategorySection({ categoryName, count, expanded, onToggleExpanded, children }: CategorySectionProps) {
   const style = getCategoryStyle(categoryName);
+  const { animations } = useDeveloperConsole();
 
   return (
     <div>
@@ -52,8 +54,8 @@ export default function CategorySection({ categoryName, count, expanded, onToggl
           unmounting - trades a little always-in-DOM cost (fine at this
           app's 100-item/20-category scale) for an animatable height. */}
       <div
-        className="grid transition-[grid-template-rows] duration-200 ease-out"
-        style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
+        className="grid transition-[grid-template-rows] ease-out"
+        style={{ gridTemplateRows: expanded ? '1fr' : '0fr', transitionDuration: `${animations.listItemAnimationDuration}ms` }}
         aria-hidden={!expanded}
       >
         <div className="overflow-hidden">

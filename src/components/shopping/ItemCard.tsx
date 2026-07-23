@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { Item } from '../../hooks/useItems';
 import { getCategoryStyle } from '../../theme/categoryStyles';
-import { useSwipeSettings } from '../../config/devSettings';
+import { useDeveloperConsole } from '../../config/DeveloperConsoleContext';
 
 interface ItemCardProps {
   item: Item;
@@ -83,7 +83,7 @@ const ROW_SHADOW_DRAG = 'shadow-[0_3px_6px_rgba(15,23,42,0.08),0_10px_24px_rgba(
 // the hood, this is a display/interaction grouping only.
 
 export default function ItemCard({ item, count, categoryName, onToggle, onDelete, onRename, onIncrement, onDecrement, playEntryHint = false }: ItemCardProps) {
-  const swipeSettings = useSwipeSettings();
+  const { swipe: swipeSettings, featureFlags } = useDeveloperConsole();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(item.name);
   const [translateX, setTranslateX] = useState(0);
@@ -223,10 +223,12 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
 
     if (next >= DELETE_THRESHOLD_PX && !hasVibratedThreshold.current) {
       hasVibratedThreshold.current = true;
-      try {
-        navigator.vibrate?.(10);
-      } catch {
-        // Unsupported - fine to ignore, this is a best-effort touch.
+      if (featureFlags.enableHaptics) {
+        try {
+          navigator.vibrate?.(10);
+        } catch {
+          // Unsupported - fine to ignore, this is a best-effort touch.
+        }
       }
     } else if (next < DELETE_THRESHOLD_PX) {
       hasVibratedThreshold.current = false;
@@ -322,6 +324,50 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
         )}
 
         <span className="flex-shrink-0 text-[12px] font-medium text-gray-400 opacity-70">{count}x</span>
+      </li>
+    );
+  }
+
+  // Dev/QA feature flag: Enable Swipe Delete off. Same non-swipeable
+  // shape as the completed-item row above (no pointer/drag machinery
+  // mounted at all), but for an active item - which still needs a way
+  // to delete, so a plain button replaces the swipe gesture rather
+  // than removing deletion entirely.
+  if (!featureFlags.enableSwipeDelete) {
+    return (
+      <li className={`flex items-center gap-2.5 ${ROW_BASE} ${ROW_SHADOW_REST}`}>
+        <span className={`flex-shrink-0 w-1 self-stretch rounded-full ${style.strip}`} aria-hidden="true" />
+        <button
+          onClick={onToggle}
+          aria-label="toggle item"
+          className="relative flex-shrink-0 w-[22px] h-[22px] rounded-full border-2 border-gray-300 hover:border-green-400 flex items-center justify-center transition-all duration-200"
+        >
+          <span className="absolute -inset-[11px]" aria-hidden="true" />
+        </button>
+
+        {isEditing ? (
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+            className="flex-1 min-w-0 border-b border-blue-400 bg-transparent focus:outline-none text-[15px] font-semibold"
+          />
+        ) : (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="flex-1 min-w-0 text-right truncate text-[15px] font-semibold text-gray-900"
+          >
+            {item.name}
+          </button>
+        )}
+
+        <span className="flex-shrink-0 text-[12px] font-medium text-gray-500">{count}x</span>
+
+        <button onClick={onDelete} aria-label="מחיקת פריט" className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors px-1">
+          🗑️
+        </button>
       </li>
     );
   }

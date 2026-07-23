@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { LanguageProvider, useLanguage } from "./LanguageContext";
+import { DeveloperConsoleProvider } from "./config/DeveloperConsoleContext";
 import "./index.css";
 
 function RootWithDirection() {
@@ -17,9 +18,11 @@ function RootWithDirection() {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <LanguageProvider>
-      <RootWithDirection />
-    </LanguageProvider>
+    <DeveloperConsoleProvider>
+      <LanguageProvider>
+        <RootWithDirection />
+      </LanguageProvider>
+    </DeveloperConsoleProvider>
   </React.StrictMode>
 );
 

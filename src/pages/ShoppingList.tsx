@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import UndoSnackbar from '../components/shopping/UndoSnackbar';
 import DemoItemRow from '../components/shopping/DemoItemRow';
+import { useDeveloperConsole } from '../config/DeveloperConsoleContext';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
@@ -106,6 +107,7 @@ export default function ShoppingList() {
   const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
   const { categories } = useCategories();
   const { members: realMembers, currentUserId, inviteMember } = useMembers();
+  const { featureFlags, animations } = useDeveloperConsole();
 
   const [input, setInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -156,7 +158,9 @@ export default function ShoppingList() {
   // never lost it. Only one removal is undo-able at a time; a second
   // swipe-delete while one is already pending finalizes the earlier one
   // immediately rather than losing track of it.
-  const UNDO_WINDOW_MS = 5000;
+  // Dev/QA-tunable (Developer Console > Animations > Snackbar Duration);
+  // defaults to the original hardcoded 5000ms.
+  const UNDO_WINDOW_MS = animations.snackbarDuration;
   const GROUP_CLOSE_FADE_MS = 300;
   interface PendingRemoval {
     ids: string[];
@@ -170,6 +174,12 @@ export default function ShoppingList() {
   };
 
   const scheduleRemoval = (ids: string[], label: string) => {
+    // Dev/QA feature flag: Enable Undo Snackbar off - delete
+    // immediately, skipping the soft-delete/undo window entirely.
+    if (!featureFlags.enableUndoSnackbar) {
+      ids.forEach((id) => deleteItem(id));
+      return;
+    }
     setPendingRemoval((current) => {
       if (current) {
         window.clearTimeout(current.timeoutId);
@@ -358,10 +368,14 @@ export default function ShoppingList() {
   // the swipe-discovery animation first, then fades out before the real
   // empty state appears. Resets whenever the list goes from non-empty
   // back to empty, so the demo plays fresh each time that happens.
-  const [demoRowDone, setDemoRowDone] = useState(false);
+  // "Done" by default when the demo is disabled (Developer Console >
+  // Feature Flags > Enable Demo Animation) - otherwise the empty state
+  // below, which only fades in once demoRowDone is true, would never
+  // appear at all with the demo row skipped.
+  const [demoRowDone, setDemoRowDone] = useState(!featureFlags.enableDemoAnimation);
   useEffect(() => {
-    if (visibleItems.length > 0) setDemoRowDone(false);
-  }, [visibleItems.length]);
+    if (visibleItems.length > 0) setDemoRowDone(!featureFlags.enableDemoAnimation);
+  }, [visibleItems.length, featureFlags.enableDemoAnimation]);
 
   // Fade the empty state in once the demo row (if any) has finished,
   // rather than snapping straight to it.
@@ -567,7 +581,7 @@ export default function ShoppingList() {
         style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom) + 16px)' }}
       >
         {visibleItems.length === 0 ? (
-          !demoRowDone ? (
+          featureFlags.enableDemoAnimation && !demoRowDone ? (
             <DemoItemRow label="חלב 3%" onFinished={() => setDemoRowDone(true)} />
           ) : (
             <div className={`transition-opacity duration-300 ${emptyStateVisible ? 'opacity-100' : 'opacity-0'}`}>

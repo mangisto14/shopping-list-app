@@ -9,7 +9,7 @@ import ListsPage from './pages/Lists';
 import Dashboard from './pages/Dashboard';
 import Statistics from './pages/Statistics';
 import FamilyMembers from './pages/FamilyMembers';
-import DevSettings from './pages/DevSettings';
+import DeveloperConsole from './pages/DeveloperConsole';
 
 import { isDevSettingsEnabled } from './config/devSettings';
 import { useAuth } from './hooks/useAuth';
@@ -17,6 +17,7 @@ import { useLanguage } from './LanguageContext';
 import { ActiveListProvider } from './ActiveListContext';
 import HeaderMenu from './components/HeaderMenu2';
 import BottomNav from './components/navigation/BottomNav';
+import UiDebugOverlay from './components/dev/UiDebugOverlay';
 
 export default function App() {
   return (
@@ -45,7 +46,10 @@ function AppShell() {
       <Route path="/categories" element={<CategoriesPage />} />
       <Route path="/lists" element={<ListsPage />} />
       <Route path="/history" element={<HistoryPage />} />
-      {isDevSettingsEnabled() && <Route path="/dev-settings" element={<DevSettings />} />}
+      {/* URL kept stable at /dev-settings across the Developer Settings
+          -> Developer Console upgrade - only the page's content and
+          on-screen title changed. */}
+      {isDevSettingsEnabled() && <Route path="/dev-settings" element={<DeveloperConsole />} />}
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
@@ -93,6 +97,7 @@ function AppShell() {
       </div>
 
       {user && <BottomNav />}
+      {isDevSettingsEnabled() && <UiDebugOverlay />}
     </div>
   );
 }

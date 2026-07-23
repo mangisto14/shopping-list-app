@@ -1,11 +1,13 @@
 // e2e/dev-settings.spec.ts
-// Coverage for the dev/QA-only Developer Settings screen
-// (src/pages/DevSettings.tsx, src/config/devSettings.ts) and its effect
-// on ItemCard.tsx's swipe-to-delete behavior. This suite always runs
-// against a standard production build (no VITE_ENABLE_DEV_SETTINGS,
+// Coverage for the dev/QA-only Developer Console
+// (src/pages/DeveloperConsole.tsx, src/config/devSettings.ts) and its
+// effect on ItemCard.tsx's swipe-to-delete behavior. This suite always
+// runs against a standard production build (no VITE_ENABLE_DEV_SETTINGS,
 // import.meta.env.DEV false - see playwright.config.ts), so the first
 // test doubles as the "hidden in production" verification: if the gate
 // were ever broken open, this build would be the one to catch it.
+// e2e/dev-console-live.spec.ts covers the opposite build (flag on) and
+// actually drives the console's own UI.
 import { test, expect } from '@playwright/test';
 import { seedAuthSession, mockListData, LIST_ID, USER_ID } from './fixtures';
 
@@ -22,11 +24,11 @@ test('the dev-settings route and menu entry are absent from a production build',
   // list, not some broken/blank dev screen.
   await page.goto('/dev-settings');
   await expect(page).toHaveURL('/');
-  await expect(page.getByText('Developer Settings')).toHaveCount(0);
+  await expect(page.getByText('Developer Console')).toHaveCount(0);
 
   // Also absent from the hamburger menu itself.
   await page.getByRole('button', { name: 'תפריט ניווט' }).click();
-  await expect(page.getByText('Developer Settings')).toHaveCount(0);
+  await expect(page.getByText('Developer Console')).toHaveCount(0);
 });
 
 test('a custom revealThreshold from dev settings changes where a partial swipe snaps open', async ({ page }) => {
@@ -99,4 +101,46 @@ test('a custom autoCloseDelay from dev settings closes an open row on its own', 
   // Left untouched past autoCloseDelay (400ms) - the row closes itself,
   // with no further tap/interaction.
   await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 0, 0\)/, { timeout: 2000 });
+});
+
+const FEATURE_FLAGS_KEY = 'dev-settings:featureFlags';
+
+test('disabling the Enable Email Invite flag hides the email form but keeps the share link', async ({ page }) => {
+  await seedAuthSession(page);
+  await page.addInitScript(
+    ({ key, value }) => localStorage.setItem(key, value),
+    { key: FEATURE_FLAGS_KEY, value: JSON.stringify({ enableEmailInvite: false }) }
+  );
+  await mockListData(page, { categories: [], items: [] });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'הזמן חבר' }).click();
+
+  await expect(page.getByText('קישור הזמנה למשפחה')).toBeVisible();
+  await expect(page.locator('input[type="email"]')).toHaveCount(0);
+  await expect(page.getByText('הזמנה באימייל')).toHaveCount(0);
+});
+
+test('disabling the Enable Swipe Delete flag replaces swipe with a plain delete button', async ({ page }) => {
+  await seedAuthSession(page);
+  await page.addInitScript(
+    ({ key, value }) => localStorage.setItem(key, value),
+    { key: FEATURE_FLAGS_KEY, value: JSON.stringify({ enableSwipeDelete: false }) }
+  );
+  await mockListData(page, {
+    categories: [{ id: CAT_DAIRY, list_id: LIST_ID, user_id: USER_ID, name: 'מוצרי חלב' }],
+    items: [
+      { id: 'e2e-item-1', list_id: LIST_ID, user_id: USER_ID, category_id: CAT_DAIRY, name: 'חלב 3%', is_done: false, position: 0 },
+    ],
+  });
+
+  await page.goto('/');
+  // No swipe machinery mounted at all with the flag off - the row has
+  // no data-testid="item-row" wrapper (see ItemCard.tsx's dedicated
+  // branch for this), only a plain delete button.
+  await expect(page.locator('[data-testid="item-row"]')).toHaveCount(0);
+  const deleteButton = page.getByRole('button', { name: 'מחיקת פריט' });
+  await expect(deleteButton).toBeVisible();
+  await deleteButton.click();
+  await expect(page.getByText('חלב 3%')).toHaveCount(0);
 });

@@ -40,7 +40,7 @@ export default function HeaderMenu() {
   { name: t.history_title, href: '/history', icon: ArchiveBoxIcon },
   // Dev/QA only - never shown in an ordinary production build. See
   // src/config/devSettings.ts.
-  ...(isDevSettingsEnabled() ? [{ name: 'Developer Settings', href: '/dev-settings', icon: WrenchScrewdriverIcon }] : []),
+  ...(isDevSettingsEnabled() ? [{ name: 'Developer Console', href: '/dev-settings', icon: WrenchScrewdriverIcon }] : []),
 
 ]
   return (
