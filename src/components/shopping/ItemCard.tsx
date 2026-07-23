@@ -51,10 +51,11 @@ const COLLAPSE_MS = 220;
 
 // Entry hint: a one-time nudge shortly after the row mounts, teaching
 // the swipe-right-to-delete gesture without feeling like a tutorial.
-const ENTRY_HINT_DELAY_MS = 400;
+// Total: 500 delay + 220 slide + 500 hold + 220 return = 1440ms.
+const ENTRY_HINT_DELAY_MS = 500;
 const ENTRY_HINT_DISTANCE_PX = 18;
-const ENTRY_HINT_HOLD_MS = 250;
-const ENTRY_HINT_TRANSITION_MS = 300;
+const ENTRY_HINT_HOLD_MS = 500;
+const ENTRY_HINT_TRANSITION_MS = 220;
 
 function prefersReducedMotion() {
   return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
