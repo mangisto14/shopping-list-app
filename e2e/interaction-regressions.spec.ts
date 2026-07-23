@@ -38,7 +38,12 @@ test('swiping a row past the delete threshold removes the item', async ({ page }
   }
   await page.mouse.up();
 
-  await expect(page.getByText('גבינה צהובה')).not.toBeVisible();
+  // Scoped to the row itself (not a page-wide text search): the new
+  // UndoSnackbar (added alongside this swipe-to-delete UX) shows a
+  // "{item} נמחק" toast after delete, which also contains the item's
+  // name - a page.getByText() substring match would ambiguously match
+  // that toast too, even though the actual row is gone.
+  await expect(row).toHaveCount(0);
 });
 
 test('a plain tap on the checkbox still toggles - not swallowed by swipe handling', async ({ page }) => {

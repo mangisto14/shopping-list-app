@@ -124,7 +124,8 @@ npm run test:e2e
 The schema lives in `supabase/migrations/` as SQL files, managed with the [Supabase CLI](https://supabase.com/docs/guides/cli). [`.github/workflows/supabase-migrations.yml`](.github/workflows/supabase-migrations.yml) is split into two jobs so a broken migration is caught **before** it merges, not after:
 
 - **`validate`** — runs on every pull request that touches `supabase/migrations/**`, and again on push to `main`. Spins up a throwaway local Supabase stack (Postgres + GoTrue + PostgREST via Docker, no secrets needed) with `supabase start`, then applies every migration from scratch with `supabase db reset`. A SQL error, bad ordering assumption, or non-idempotent statement fails here, gating the PR. The list of migration files in the run and a validation summary are written to the workflow run's summary.
-- **`deploy`** — only runs on push to `main`, and only after `validate` succeeds (`needs: validate`, plus a redundant `if` guard as a second safety net). Three steps, in order: `supabase link --project-ref` (links the real project — this also needs `SUPABASE_DB_PASSWORD` to verify database connectivity non-interactively), `supabase migration list --linked` (prints the local-vs-remote migration diff to the log so a reviewer can see exactly what's about to change), then `supabase db push` to apply the already-validated migrations. `supabase migration list` has no `--project-ref` flag — it only accepts `--linked`/`--local`/`--db-url` — so linking has to happen first; `--linked` reads the project that step just linked.
+- **`deploy-production`** — only runs on push to `main`, and only after `validate` succeeds (`needs: validate`, plus a redundant `if` guard as a second safety net). Three steps, in order: `supabase link --project-ref` (links the real project — this also needs `SUPABASE_DB_PASSWORD` to verify database connectivity non-interactively), `supabase migration list --linked` (prints the local-vs-remote migration diff to the log so a reviewer can see exactly what's about to change), then `supabase db push` to apply the already-validated migrations. `supabase migration list` has no `--project-ref` flag — it only accepts `--linked`/`--local`/`--db-url` — so linking has to happen first; `--linked` reads the project that step just linked.
+- **`deploy-development`** — the same three-step sequence, but only on push to `develop`, targeting a separate Supabase project (`shopping-list-dev`, ref `wfattbxpmugzhqzqharc`) via its own secrets. This keeps `develop` an independent environment: migrations merged there apply automatically to the dev project, and never touch the production database until they're actually merged to `main`.
 
 **Creating a migration:**
 ```bash
@@ -132,13 +133,15 @@ supabase migration new <short_description>
 ```
 Prefer additive, idempotent statements (`create table if not exists`, `drop policy if exists` before `create policy`, etc.) so migrations can be safely re-run.
 
-Required GitHub Secrets (**Settings → Secrets and variables → Actions**), used only by the `deploy` job:
+Required GitHub Secrets (**Settings → Secrets and variables → Actions**):
 
-| Secret | Purpose |
-|---|---|
-| `SUPABASE_ACCESS_TOKEN` | [Personal access token](https://supabase.com/dashboard/account/tokens) authorizing the CLI against the Supabase Management API |
-| `SUPABASE_PROJECT_ID` | Target project's reference ID |
-| `SUPABASE_DB_PASSWORD` | Project's database password, required for `supabase db push` |
+| Secret | Used by | Purpose |
+|---|---|---|
+| `SUPABASE_ACCESS_TOKEN` | both jobs | [Personal access token](https://supabase.com/dashboard/account/tokens) authorizing the CLI against the Supabase Management API — authenticates to your Supabase *account*, not a specific project, so the same token covers both environments |
+| `SUPABASE_PROJECT_ID` | `deploy-production` | Production project's reference ID |
+| `SUPABASE_DB_PASSWORD` | `deploy-production` | Production project's database password, required for `supabase db push` |
+| `SUPABASE_DEV_PROJECT_ID` | `deploy-development` | Development project's (`shopping-list-dev`) reference ID — `wfattbxpmugzhqzqharc` |
+| `SUPABASE_DEV_DB_PASSWORD` | `deploy-development` | Development project's database password |
 
 **Manual migration run:**
 ```bash
@@ -150,7 +153,10 @@ supabase db push
 ### Deploying to Vercel
 
 1. Import the repository at [vercel.com/new](https://vercel.com/new)
-2. Set the environment variables from the table above in the Vercel project's settings (Production, Preview, and Development as needed)
+2. Set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (and optionally `VITE_APP_URL`) in the Vercel project's settings, scoped per environment:
+   - **Production** → the production Supabase project (same one `SUPABASE_PROJECT_ID` targets)
+   - **Preview** → the `shopping-list-dev` project (ref `wfattbxpmugzhqzqharc`), so PR/branch previews (including `develop`) read and write the dev database instead of production
+   - **Development** (`vercel dev`) → the dev project as well, or a local Supabase stack
 3. Vercel auto-detects the Vite build (`npm run build`, output directory `dist`); `vercel.json`'s rewrite rule handles client-side routing so deep links (`/statistics`, `/family`, etc.) don't 404 on refresh
 
 ## Future Roadmap
