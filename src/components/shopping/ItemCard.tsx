@@ -1,5 +1,5 @@
 // src/components/shopping/ItemCard.tsx
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { Item } from '../../hooks/useItems';
 import { getCategoryStyle } from '../../theme/categoryStyles';
 
@@ -14,6 +14,9 @@ interface ItemCardProps {
   count: number;
   categoryName?: string;
   onToggle: () => void;
+  // Called once the row's own slide/fade/collapse delete animation has
+  // fully played out - this is the point the caller should actually
+  // remove the item(s).
   onDelete: () => void;
   onRename: (newName: string) => void;
   // Only meaningful (and only rendered) when count > 1 - lets the user
@@ -21,6 +24,11 @@ interface ItemCardProps {
   // which now always removes the *entire* group (see onDelete).
   onIncrement?: () => void;
   onDecrement?: () => void;
+  // Only ever true for one row at a time (the first rendered shopping
+  // item in the list) - ShoppingList.tsx decides which, this component
+  // just plays the hint when told to. Defaults to false so every other
+  // row stays silent.
+  playEntryHint?: boolean;
 }
 
 // Swipe-to-delete tuning. REVEAL is where the row snaps to when the user
@@ -31,12 +39,38 @@ interface ItemCardProps {
 const REVEAL_PX = 80;
 const DELETE_THRESHOLD_PX = 180;
 const MAX_DRAG_PX = 220;
-const DELETE_ANIMATION_MS = 180;
 
-// min-h-[58px] keeps every row in the 56-64px target band regardless of
+// Delete choreography: slide fully off to the right, fade, then collapse
+// height so the rows below animate upward instead of snapping into
+// place. Both phases play out locally in this component before onDelete
+// fires, so by the time the parent actually removes the item the row is
+// already invisible/zero-height - no jump cut.
+const SLIDE_OUT_PX = 420;
+const SLIDE_FADE_MS = 220;
+const COLLAPSE_MS = 220;
+
+// Entry hint: a one-time nudge shortly after the row mounts, teaching
+// the swipe-right-to-delete gesture without feeling like a tutorial.
+// Total: 500 delay + 220 slide + 500 hold + 220 return = 1440ms.
+const ENTRY_HINT_DELAY_MS = 500;
+const ENTRY_HINT_DISTANCE_PX = 18;
+const ENTRY_HINT_HOLD_MS = 500;
+const ENTRY_HINT_TRANSITION_MS = 220;
+
+function prefersReducedMotion() {
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+// min-h-[52px] keeps every row in the 50-56px target band regardless of
 // content, rather than letting padding alone (which varies with font
-// rendering) land outside it.
-const ROW_SHAPE = 'bg-white rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_10px_rgba(15,23,42,0.05)] px-3.5 py-2.5 min-h-[58px]';
+// rendering) land outside it. The border makes the row read as a
+// complete, self-contained card rather than just a flat colored block -
+// it's part of the card element itself, so it moves with the card and
+// stays visible for the entire swipe, never interrupted by the delete
+// layer underneath.
+const ROW_BASE = 'bg-white rounded-xl px-3 py-2 min-h-[52px] border border-gray-100';
+const ROW_SHADOW_REST = 'shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_10px_rgba(15,23,42,0.05)]';
+const ROW_SHADOW_DRAG = 'shadow-[0_3px_6px_rgba(15,23,42,0.08),0_10px_24px_rgba(15,23,42,0.12)]';
 
 // Compact item row: category-color strip, checkbox, name, quantity. No
 // category badge, no "added by" attribution, no avatar - the design
@@ -48,12 +82,14 @@ const ROW_SHAPE = 'bg-white rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4
 // cluster's actual size as "Nx" - each unit is still its own row under
 // the hood, this is a display/interaction grouping only.
 
-export default function ItemCard({ item, count, categoryName, onToggle, onDelete, onRename, onIncrement, onDecrement }: ItemCardProps) {
+export default function ItemCard({ item, count, categoryName, onToggle, onDelete, onRename, onIncrement, onDecrement, playEntryHint = false }: ItemCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(item.name);
   const [translateX, setTranslateX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [hinting, setHinting] = useState(false);
   const style = getCategoryStyle(categoryName);
 
   const dragStartX = useRef(0);
@@ -62,6 +98,7 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
   const pointerId = useRef<number | null>(null);
   const isScrollGesture = useRef(false);
   const hasCaptured = useRef(false);
+  const hasVibratedThreshold = useRef(false);
 
   const closeSwipe = () => setTranslateX(0);
 
@@ -75,21 +112,43 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
     setIsEditing(false);
   };
 
+  // One-time entry hint: reveal the swipe affordance briefly, then
+  // settle back. Only plays when the parent asks for it (the first
+  // rendered row) - skipped for every other row, for completed rows (no
+  // swipe there), and under reduced-motion.
+  useEffect(() => {
+    if (!playEntryHint || item.is_done || prefersReducedMotion()) return;
+
+    const delayTimer = window.setTimeout(() => {
+      setHinting(true);
+      setTranslateX(ENTRY_HINT_DISTANCE_PX);
+      const holdTimer = window.setTimeout(() => {
+        setTranslateX(0);
+        window.setTimeout(() => setHinting(false), ENTRY_HINT_TRANSITION_MS);
+      }, ENTRY_HINT_HOLD_MS);
+      return () => window.clearTimeout(holdTimer);
+    }, ENTRY_HINT_DELAY_MS);
+
+    return () => window.clearTimeout(delayTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const triggerDelete = () => {
+    const reduced = prefersReducedMotion();
     setIsDeleting(true);
-    window.setTimeout(onDelete, DELETE_ANIMATION_MS);
+    setTranslateX(reduced ? translateX : SLIDE_OUT_PX);
+    const slideMs = reduced ? 0 : SLIDE_FADE_MS;
+    const collapseMs = reduced ? 80 : COLLAPSE_MS;
+    window.setTimeout(() => setCollapsed(true), slideMs);
+    window.setTimeout(onDelete, slideMs + collapseMs);
   };
 
   // Swipe-to-reveal, implemented with Pointer Events (touch + mouse, no
-  // gesture library). RTL note: dragging the finger left-to-right
-  // (positive screen-space delta) reveals the action on the *left* edge
-  // of the row - the trailing edge in RTL, matching the design and the
-  // general convention that trailing-edge row actions are revealed by
-  // swiping against reading direction (RTL reads right-to-left, so the
-  // reveal gesture is left-to-right - the mirror image of the familiar
-  // LTR "swipe left to reveal" iOS Mail pattern, not a literal copy of
-  // it). `transform: translateX()` uses physical pixels regardless of
-  // `dir`, so this is deliberate, not an RTL bug.
+  // gesture library). Dragging the finger left-to-right (positive
+  // screen-space delta) slides the row to the right, revealing the
+  // permanent red delete strip/panel fixed at the row's left edge.
+  // `transform: translateX()` uses physical pixels regardless of `dir`,
+  // so this works the same in RTL as LTR - deliberate, not an RTL bug.
   const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (isEditing) return;
     dragStartX.current = e.clientX;
@@ -98,6 +157,8 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
     pointerId.current = e.pointerId;
     isScrollGesture.current = false;
     hasCaptured.current = false;
+    hasVibratedThreshold.current = false;
+    setHinting(false);
     setDragging(true);
     // Deliberately NOT capturing the pointer here. Chromium retargets
     // the synthetic `click` a tap produces to whichever element holds
@@ -139,6 +200,17 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
 
     const next = Math.min(MAX_DRAG_PX, Math.max(0, dragStartTranslate.current + deltaX));
     setTranslateX(next);
+
+    if (next >= DELETE_THRESHOLD_PX && !hasVibratedThreshold.current) {
+      hasVibratedThreshold.current = true;
+      try {
+        navigator.vibrate?.(10);
+      } catch {
+        // Unsupported - fine to ignore, this is a best-effort touch.
+      }
+    } else if (next < DELETE_THRESHOLD_PX) {
+      hasVibratedThreshold.current = false;
+    }
   };
 
   const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -190,7 +262,7 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
   // completed rows removes the possibility entirely.)
   if (item.is_done) {
     return (
-      <li className={`flex items-center gap-2.5 ${ROW_SHAPE}`}>
+      <li className={`flex items-center gap-2.5 ${ROW_BASE} ${ROW_SHADOW_REST}`}>
         <span className={`flex-shrink-0 w-1 self-stretch rounded-full ${style.strip} opacity-50`} aria-hidden="true" />
         <button
           onClick={onToggle}
@@ -230,20 +302,36 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
     );
   }
 
+  const revealProgress = Math.min(1, translateX / REVEAL_PX);
+  const pastThreshold = translateX >= DELETE_THRESHOLD_PX;
+  const iconScale = pastThreshold ? 1.15 : 0.8 + 0.2 * revealProgress;
+
   return (
-    <li className={`relative overflow-hidden rounded-xl transition-opacity duration-[180ms] ${isDeleting ? 'opacity-0' : ''}`}>
+    <li
+      className={`relative rounded-xl transition-[opacity,max-height] ease-in-out ${isDeleting ? 'opacity-0' : 'opacity-100'}`}
+      style={{
+        overflow: 'hidden',
+        maxHeight: collapsed ? 0 : 96,
+        transitionDuration: `${collapsed ? COLLAPSE_MS : SLIDE_FADE_MS}ms`,
+      }}
+    >
       {/* Delete action, fixed at the left edge, revealed as the row
           above it slides right. Only ever mounted for active items -
-          see the `item.is_done` branch above. */}
+          see the `item.is_done` branch above. This container's own
+          size/position never changes - only the icon inside is
+          repositioned to the left edge, via absolute placement within
+          it, so it stays put regardless of the card's drag. */}
       <div
-        className="absolute inset-y-0 left-0 flex items-center justify-center bg-red-500 rounded-xl"
+        className={`absolute inset-y-0 left-0 rounded-xl transition-colors duration-150 ${
+          pastThreshold ? 'bg-red-600' : 'bg-red-500'
+        }`}
         style={{ width: MAX_DRAG_PX }}
       >
         <button
           onClick={triggerDelete}
           aria-label="מחיקת פריט"
-          className="flex flex-col items-center gap-0.5 text-white px-4"
-          style={{ opacity: Math.min(1, translateX / REVEAL_PX) }}
+          className="absolute left-3.5 top-1/2 flex flex-col items-center gap-0.5 text-white"
+          style={{ opacity: revealProgress, transform: `translateY(-50%) scale(${iconScale})` }}
         >
           <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
             <path
@@ -264,11 +352,17 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
         onPointerCancel={endDrag}
         style={{
           transform: `translateX(${translateX}px)`,
-          transition: dragging ? 'none' : 'transform 180ms ease-out',
+          transition: dragging ? 'none' : `transform ${hinting ? ENTRY_HINT_TRANSITION_MS : 180}ms ease-out`,
           touchAction: 'pan-y',
         }}
-        className={`relative flex items-center gap-2.5 ${ROW_SHAPE}`}
+        className={`relative flex items-center gap-2.5 overflow-hidden ${ROW_BASE} ${dragging ? ROW_SHADOW_DRAG : ROW_SHADOW_REST}`}
       >
+        {/* Permanent swipe-to-delete affordance - not a category
+            indicator (that's the separate strip below). Always visible,
+            moves with the card, clipped to the card's own rounded
+            corners by this container's overflow-hidden. */}
+        <span className="absolute inset-y-0 left-0 w-[2px] bg-red-500" aria-hidden="true" />
+
         <span className={`flex-shrink-0 w-1 self-stretch rounded-full ${style.strip}`} aria-hidden="true" />
 
         <button

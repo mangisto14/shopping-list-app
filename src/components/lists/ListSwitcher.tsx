@@ -17,7 +17,7 @@ export default function ListSwitcher({ lists, activeList, onSelect, onCreateNew 
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 px-1 py-0.5 -mx-1 text-gray-500 hover:text-gray-700 transition-colors active:scale-[0.98]"
+        className="flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05),0_2px_6px_rgba(15,23,42,0.04)] text-gray-600 hover:text-gray-800 transition-all active:scale-[0.98]"
       >
         <span className="flex items-center gap-1 text-[13px] font-medium min-w-0">
           <span className="flex-shrink-0">{activeList?.emoji ?? '📋'}</span>

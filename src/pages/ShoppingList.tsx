@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import UndoSnackbar from '../components/shopping/UndoSnackbar';
+import DemoItemRow from '../components/shopping/DemoItemRow';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
@@ -146,6 +148,80 @@ export default function ShoppingList() {
   const [pendingMoves, setPendingMoves] = useState<Map<string, 'todo' | 'done'>>(new Map());
   const pendingMoveTimeouts = useRef<Map<string, number>>(new Map());
   const TOGGLE_TRANSITION_MS = 200;
+
+  // Swipe-delete Undo: a soft-delete window. The item is never actually
+  // removed via deleteItem() until the timer below elapses - it's just
+  // filtered out of what's rendered (see visibleItems). Undo simply
+  // clears this state, and the item reappears untouched since useItems()
+  // never lost it. Only one removal is undo-able at a time; a second
+  // swipe-delete while one is already pending finalizes the earlier one
+  // immediately rather than losing track of it.
+  const UNDO_WINDOW_MS = 5000;
+  const GROUP_CLOSE_FADE_MS = 300;
+  interface PendingRemoval {
+    ids: string[];
+    label: string;
+    timeoutId: number;
+  }
+  const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null);
+
+  const commitRemoval = (removal: PendingRemoval) => {
+    removal.ids.forEach((id) => deleteItem(id));
+  };
+
+  const scheduleRemoval = (ids: string[], label: string) => {
+    setPendingRemoval((current) => {
+      if (current) {
+        window.clearTimeout(current.timeoutId);
+        commitRemoval(current);
+      }
+      const timeoutId = window.setTimeout(() => {
+        setPendingRemoval((latest) => {
+          if (latest && latest.timeoutId === timeoutId) {
+            commitRemoval(latest);
+            return null;
+          }
+          return latest;
+        });
+      }, UNDO_WINDOW_MS);
+      return { ids, label, timeoutId };
+    });
+  };
+
+  const handleUndo = () => {
+    setPendingRemoval((current) => {
+      if (current) window.clearTimeout(current.timeoutId);
+      return null;
+    });
+  };
+
+  // Switching lists invalidates any in-flight removal (it referenced the
+  // previous list's item ids) - finalize it immediately rather than
+  // leaving a dangling timer or silently losing the delete.
+  useEffect(() => {
+    return () => {
+      setPendingRemoval((current) => {
+        if (current) {
+          window.clearTimeout(current.timeoutId);
+          commitRemoval(current);
+        }
+        return null;
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeListId]);
+
+  // Category headers that just emptied out due to a pending removal -
+  // kept mounted a little longer, fading out instead of vanishing the
+  // instant their last item is soft-deleted. Section-scoped so the same
+  // category can close independently in the to-buy vs. completed list.
+  interface ClosingGroup {
+    key: string;
+    categoryId: string | null;
+    categoryName: string | null;
+  }
+  const [closingGroups, setClosingGroups] = useState<ClosingGroup[]>([]);
+  const closingGroupTimeouts = useRef<Map<string, number>>(new Map());
   // Quick-add "quantity": no `quantity` column on `items` (schema change,
   // out of scope), so this controls how many copies of the same item
   // addItem() below inserts - a UI-only interpretation of the stepper,
@@ -238,10 +314,11 @@ export default function ShoppingList() {
     setShowAddForm(false);
   };
 
-  const visibleItems = useMemo(
-    () => (selectedCategory === 'all' ? items : items.filter((i) => i.category_id === selectedCategory)),
-    [items, selectedCategory]
-  );
+  const visibleItems = useMemo(() => {
+    const byCategory = selectedCategory === 'all' ? items : items.filter((i) => i.category_id === selectedCategory);
+    if (!pendingRemoval) return byCategory;
+    return byCategory.filter((i) => !pendingRemoval.ids.includes(i.id));
+  }, [items, selectedCategory, pendingRemoval]);
 
   const sectionFor = (item: Item): 'todo' | 'done' => pendingMoves.get(item.id) ?? (item.is_done ? 'done' : 'todo');
   const toBuyItems = useMemo(() => visibleItems.filter((i) => sectionFor(i) === 'todo'), [visibleItems, pendingMoves]);
@@ -277,6 +354,26 @@ export default function ShoppingList() {
 
   const totalItems = items.length;
 
+  // When the list is empty, a one-time non-interactive DemoItemRow plays
+  // the swipe-discovery animation first, then fades out before the real
+  // empty state appears. Resets whenever the list goes from non-empty
+  // back to empty, so the demo plays fresh each time that happens.
+  const [demoRowDone, setDemoRowDone] = useState(false);
+  useEffect(() => {
+    if (visibleItems.length > 0) setDemoRowDone(false);
+  }, [visibleItems.length]);
+
+  // Fade the empty state in once the demo row (if any) has finished,
+  // rather than snapping straight to it.
+  const [emptyStateVisible, setEmptyStateVisible] = useState(false);
+  useEffect(() => {
+    if (visibleItems.length === 0 && demoRowDone) {
+      const id = requestAnimationFrame(() => setEmptyStateVisible(true));
+      return () => cancelAnimationFrame(id);
+    }
+    setEmptyStateVisible(false);
+  }, [visibleItems.length, demoRowDone]);
+
   if (listsLoading) {
     return <PageSkeleton />;
   }
@@ -308,51 +405,95 @@ export default function ShoppingList() {
     );
   }
 
-  const renderGroup = (group: CategoryGroup, section: 'todo' | 'done') => {
+  // Swipe/tap delete on a grouped row is destructive: it removes every
+  // unit in the cluster, never just one - per explicit product decision,
+  // decreasing quantity is only done via the +/- controls, not swipe-
+  // delete. The actual deleteItem() calls are deferred behind the Undo
+  // window (scheduleRemoval) rather than fired immediately - see the
+  // pendingRemoval state above.
+  const handleClusterDelete = (group: CategoryGroup, key: string, ids: string[], label: string) => {
+    if (ids.length === group.items.length) {
+      const existingTimeout = closingGroupTimeouts.current.get(key);
+      if (existingTimeout !== undefined) window.clearTimeout(existingTimeout);
+      setClosingGroups((prev) => [
+        ...prev.filter((g) => g.key !== key),
+        { key, categoryId: group.categoryId, categoryName: group.categoryName },
+      ]);
+      const timeoutId = window.setTimeout(() => {
+        setClosingGroups((prev) => prev.filter((g) => g.key !== key));
+        closingGroupTimeouts.current.delete(key);
+      }, GROUP_CLOSE_FADE_MS + 150);
+      closingGroupTimeouts.current.set(key, timeoutId);
+    }
+    scheduleRemoval(ids, label);
+  };
+
+  // `closing` renders a just-emptied category header with no children,
+  // fading out via the wrapping div rather than vanishing the instant
+  // its last item is soft-deleted. The wrapper stays structurally
+  // identical (same key, same div) whether live or closing, so React
+  // reuses the DOM node and the opacity change actually transitions.
+  // `firstGroup` marks the very first to-buy group, so its very first
+  // cluster is "the first rendered shopping item in the list" - the one
+  // and only row that plays the discovery animation. No other lookup or
+  // expand-state check involved - if that group happens to be
+  // collapsed, its rows (and the hint) simply never mount, which is
+  // fine.
+  const renderGroup = (group: CategoryGroup, section: 'todo' | 'done', closing = false, firstGroup = false) => {
     const key = `${section}:${group.categoryId ?? 'none'}`;
-    const clusters = clusterByName(group.items);
+    const clusters = closing ? [] : clusterByName(group.items);
     return (
-      <CategorySection
-        key={key}
-        categoryName={group.categoryName}
-        count={group.items.length}
-        expanded={!collapsedGroups.has(key)}
-        onToggleExpanded={() => toggleGroup(key)}
-      >
-        {clusters.map((cluster) => (
-          <ItemCard
-            key={cluster.key}
-            item={cluster.representative}
-            count={cluster.ids.length}
-            categoryName={group.categoryName ?? undefined}
-            onToggle={() => handleToggle(cluster.representative)}
-            // Swipe/tap delete on a grouped row is destructive: it
-            // removes every unit in the cluster, never just one - per
-            // explicit product decision, decreasing quantity is only
-            // done via the +/- controls below, not swipe-delete.
-            onDelete={() => cluster.ids.forEach((id) => deleteItem(id))}
-            onRename={(newName) => cluster.ids.forEach((id) => renameItem(id, newName))}
-            onIncrement={() => addItemToList(cluster.representative.name, cluster.representative.category_id)}
-            onDecrement={() => deleteItem(cluster.ids[cluster.ids.length - 1])}
-          />
-        ))}
-      </CategorySection>
+      <div key={key} className={`transition-opacity duration-300 ${closing ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <CategorySection
+          categoryName={group.categoryName}
+          count={closing ? 0 : group.items.length}
+          expanded={!closing && !collapsedGroups.has(key)}
+          onToggleExpanded={() => toggleGroup(key)}
+        >
+          {clusters.map((cluster, index) => (
+            <ItemCard
+              key={cluster.key}
+              item={cluster.representative}
+              count={cluster.ids.length}
+              categoryName={group.categoryName ?? undefined}
+              onToggle={() => handleToggle(cluster.representative)}
+              onDelete={() => handleClusterDelete(group, key, cluster.ids, cluster.representative.name)}
+              onRename={(newName) => cluster.ids.forEach((id) => renameItem(id, newName))}
+              onIncrement={() => addItemToList(cluster.representative.name, cluster.representative.category_id)}
+              onDecrement={() => deleteItem(cluster.ids[cluster.ids.length - 1])}
+              playEntryHint={firstGroup && index === 0}
+            />
+          ))}
+        </CategorySection>
+      </div>
     );
   };
 
+  const renderClosingGroups = (section: 'todo' | 'done', liveGroups: CategoryGroup[]) => {
+    const liveKeys = new Set(liveGroups.map((g) => `${section}:${g.categoryId ?? 'none'}`));
+    return closingGroups
+      .filter((g) => g.key.startsWith(`${section}:`) && !liveKeys.has(g.key))
+      .map((g) => renderGroup({ categoryId: g.categoryId, categoryName: g.categoryName, items: [] }, section, true));
+  };
+
+  const closingDoneGroups = renderClosingGroups('done', doneGroups);
+
   return (
     <div
-      className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto  sm:px-4 flex flex-col"
+      className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto  sm:px-4 flex flex-col overflow-hidden"
       style={{ height: 'calc(100dvh - 3rem)' }}
     >
-      {/* Fixed top region: list switcher, header, quick-add, category
-          filters. None of this scrolls - only the item list below does
-          (see the flex-1 overflow-y-auto container). `calc(100dvh -
-          3rem)` on the outer wrapper accounts for App.jsx's own h-12
-          chrome row above this page, so this page's total height plus
-          that row equals exactly the viewport height - no outer/page-
-          level scroll competing with the inner list scroll. */}
-      <div className="flex-shrink-0 pt-2">
+      {/* Single sticky Top Panel: list switcher, header (title +
+          member/item-count stats), quick-add, category filter chips.
+          These render together as one flex-shrink-0 block - none of
+          them are individually sticky/positioned, they just never enter
+          the scrollable region below. `calc(100dvh - 3rem)` + explicit
+          overflow-hidden on this page container accounts for App.jsx's
+          own h-12 chrome row above this page, so this container's
+          height plus that row always exactly fills the viewport - the
+          only scrolling region in the whole app is the <main> item list
+          below, never this page container or the document itself. */}
+      <div className="flex-shrink-0 pt-1">
         <ListSwitcher
           lists={displayLists}
           activeList={activeList}
@@ -360,7 +501,7 @@ export default function ShoppingList() {
           onCreateNew={() => setShowCreateListModal(true)}
         />
 
-        <div className="mt-1.5">
+        <div className="mt-1">
           <ShoppingHeader
             title={activeList ? `${activeList.emoji} ${activeList.name}` : t.familyTitle}
             subtitle={t.subtitle}
@@ -370,7 +511,7 @@ export default function ShoppingList() {
           />
         </div>
 
-        <div className="mt-1.5">
+        <div className="mt-1">
           <QuickAddBar
             value={input}
             onChange={setInput}
@@ -398,6 +539,7 @@ export default function ShoppingList() {
               label={t.allCategories}
               active={selectedCategory === 'all'}
               onClick={() => setSelectedCategory('all')}
+              variant="filter"
             />
             {categories.map((cat) => {
               const style = getCategoryStyle(cat.name);
@@ -409,6 +551,7 @@ export default function ShoppingList() {
                   active={selectedCategory === cat.id}
                   activeClassName={style.fill}
                   onClick={() => setSelectedCategory(cat.id)}
+                  variant="filter"
                 />
               );
             })}
@@ -416,39 +559,49 @@ export default function ShoppingList() {
         )}
       </div>
 
-      {/* Only this region scrolls. Bottom padding clears the fixed
-          BottomNav (h-16 + safe-area-inset-bottom) so the last row is
-          never hidden behind it. */}
-      <div
+      {/* The one and only scrolling region in the app. Bottom padding
+          clears the fixed BottomNav (h-16 + safe-area-inset-bottom) so
+          the last row is never hidden behind it. */}
+      <main
         className="flex-1 overflow-y-auto min-h-0 pt-3"
         style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom) + 16px)' }}
       >
         {visibleItems.length === 0 ? (
-          <EmptyState
-            icon="🛒"
-            title={t.empty}
-            description={t.emptyDescription}
-            actionLabel={t.addItemTitle}
-            onAction={openAddForm}
-            size="lg"
-          />
+          !demoRowDone ? (
+            <DemoItemRow label="חלב 3%" onFinished={() => setDemoRowDone(true)} />
+          ) : (
+            <div className={`transition-opacity duration-300 ${emptyStateVisible ? 'opacity-100' : 'opacity-0'}`}>
+              <EmptyState
+                icon="🛒"
+                title={t.empty}
+                description={t.emptyDescription}
+                actionLabel={t.addItemTitle}
+                onAction={openAddForm}
+                size="lg"
+              />
+            </div>
+          )
         ) : (
           <div className="flex flex-col gap-2.5">
-            {toBuyGroups.map((group) => renderGroup(group, 'todo'))}
+            {toBuyGroups.map((group, index) => renderGroup(group, 'todo', false, index === 0))}
+            {renderClosingGroups('todo', toBuyGroups)}
 
-            {doneGroups.length > 0 && (
+            {(doneGroups.length > 0 || closingDoneGroups.length > 0) && (
               <>
                 <div className="border-t border-gray-100 pt-2 mt-1">
                   <p className="text-[13px] font-bold text-gray-500 px-1">
                     {t.completedSectionLabel} · {doneItems.length}
                   </p>
                 </div>
-                <div className="flex flex-col gap-2.5">{doneGroups.map((group) => renderGroup(group, 'done'))}</div>
+                <div className="flex flex-col gap-2.5">
+                  {doneGroups.map((group) => renderGroup(group, 'done'))}
+                  {closingDoneGroups}
+                </div>
               </>
             )}
           </div>
         )}
-      </div>
+      </main>
 
       <AddItemSheet
         open={showAddForm}
@@ -476,6 +629,8 @@ export default function ShoppingList() {
       <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} onInvite={inviteMember} />
 
       <CreateListModal open={showCreateListModal} onClose={() => setShowCreateListModal(false)} />
+
+      {pendingRemoval && <UndoSnackbar label={`${pendingRemoval.label} נמחק`} onUndo={handleUndo} />}
     </div>
   );
 }
