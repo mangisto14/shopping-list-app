@@ -290,9 +290,12 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
     >
       {/* Delete action, fixed at the left edge, revealed as the row
           above it slides right. Only ever mounted for active items -
-          see the `item.is_done` branch above. */}
+          see the `item.is_done` branch above. This container's own
+          size/position never changes - only the icon inside is
+          repositioned to the left edge, via absolute placement within
+          it, so it stays put regardless of the card's drag. */}
       <div
-        className={`absolute inset-y-0 left-0 flex items-center justify-center rounded-xl transition-colors duration-150 ${
+        className={`absolute inset-y-0 left-0 rounded-xl transition-colors duration-150 ${
           pastThreshold ? 'bg-red-600' : 'bg-red-500'
         }`}
         style={{ width: MAX_DRAG_PX }}
@@ -300,8 +303,8 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
         <button
           onClick={triggerDelete}
           aria-label="מחיקת פריט"
-          className="flex flex-col items-center gap-0.5 text-white px-4"
-          style={{ opacity: revealProgress, transform: `scale(${iconScale})` }}
+          className="absolute left-3.5 top-1/2 flex flex-col items-center gap-0.5 text-white"
+          style={{ opacity: revealProgress, transform: `translateY(-50%) scale(${iconScale})` }}
         >
           <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
             <path
