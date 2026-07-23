@@ -138,7 +138,6 @@ export default function ConsolePanel() {
       <FeatureFlagsSection
         expanded={forceExpanded || expanded.flags} onToggle={() => toggleSection('flags')} matches={matches}
         visible={anyMatch([
-          { label: 'Email Invite', id: 'flags.enableEmailInvite' },
           { label: 'Undo Snackbar', id: 'flags.enableUndoSnackbar' },
           { label: 'Swipe Delete', id: 'flags.enableSwipeDelete' },
           { label: 'Demo Mode', id: 'flags.enableDemoMode' },

@@ -8,7 +8,6 @@
 import { createDevStore } from '../shared/createDevStore';
 
 export interface FeatureFlags {
-  enableEmailInvite: boolean;
   enableUndoSnackbar: boolean;
   enableSwipeDelete: boolean;
   enableDemoMode: boolean;
@@ -17,7 +16,6 @@ export interface FeatureFlags {
 }
 
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
-  enableEmailInvite: true,
   enableUndoSnackbar: true,
   enableSwipeDelete: true,
   enableDemoMode: true,

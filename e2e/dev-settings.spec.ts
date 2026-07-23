@@ -105,7 +105,14 @@ test('a custom autoCloseDelay from dev settings closes an open row on its own', 
 
 const FEATURE_FLAGS_KEY = 'dev-settings:featureFlags';
 
-test('disabling the Enable Email Invite flag hides the email form but keeps the share link', async ({ page }) => {
+// Regression guard: InviteMemberModal briefly had an enableEmailInvite
+// dev-console feature flag gating this section (removed - see
+// ROOT_CAUSE_REPORT_EMAIL_INVITE_RUNTIME.md and the restoration commit
+// on this branch). Email Invite is a core, always-on feature - it must
+// render unconditionally, and specifically must NOT be controllable by
+// any stray/stale localStorage value under the old (now-unused)
+// dev-settings:featureFlags key.
+test('Email Invite always renders alongside Share Link, even with a stale featureFlags override in storage', async ({ page }) => {
   await seedAuthSession(page);
   await page.addInitScript(
     ({ key, value }) => localStorage.setItem(key, value),
@@ -117,8 +124,9 @@ test('disabling the Enable Email Invite flag hides the email form but keeps the 
   await page.getByRole('button', { name: 'הזמן חבר' }).click();
 
   await expect(page.getByText('קישור הזמנה למשפחה')).toBeVisible();
-  await expect(page.locator('input[type="email"]')).toHaveCount(0);
-  await expect(page.getByText('הזמנה באימייל')).toHaveCount(0);
+  await expect(page.locator('input[type="email"]')).toBeVisible();
+  await expect(page.getByText('הזמנה באימייל')).toBeVisible();
+  await expect(page.getByRole('button', { name: /הוסף\/י/ })).toBeVisible();
 });
 
 test('disabling the Enable Swipe Delete flag replaces swipe with a plain delete button', async ({ page }) => {

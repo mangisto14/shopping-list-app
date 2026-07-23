@@ -11,15 +11,6 @@ export default function FeatureFlagsSection({
 
   return (
     <Section title="Feature Flags" expanded={expanded} onToggle={onToggle} visible={visible}>
-      {matches('Email Invite', 'flags.enableEmailInvite') && (
-        <ToggleRow
-          id="flags.enableEmailInvite" label="Email Invite"
-          hint="When off, the invite modal only offers the share link."
-          checked={flags.enableEmailInvite}
-          onChange={(v) => featureFlagsStore.set({ enableEmailInvite: v })}
-          onReset={() => featureFlagsStore.resetField('enableEmailInvite')}
-        />
-      )}
       {matches('Undo Snackbar', 'flags.enableUndoSnackbar') && (
         <ToggleRow
           id="flags.enableUndoSnackbar" label="Undo Snackbar"
