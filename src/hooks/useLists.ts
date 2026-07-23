@@ -92,7 +92,7 @@ export function useLists() {
 
     const { error: memberError } = await supabase
       .from('list_members')
-      .insert({ list_id: list.id, user_id: user.id });
+      .insert({ list_id: list.id, user_id: user.id, role: 'owner' });
 
     if (memberError) return null;
 

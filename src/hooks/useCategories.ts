@@ -5,6 +5,7 @@ import { useAuth } from './useAuth';
 import { useActiveList } from '../ActiveListContext';
 import { useRealtimeTable } from './useRealtimeTable';
 import { upsertById, removeById } from './realtimeUtils';
+import { useForceSyncListener } from '../devtools';
 
 export interface Category {
   id: string;
@@ -39,6 +40,8 @@ export function useCategories() {
   useEffect(() => {
     fetchCategories();
   }, [fetchCategories]);
+
+  useForceSyncListener(fetchCategories);
 
   useRealtimeTable<Category>('categories', activeListId, {
     onInsert: (row) => setCategories((prev) => upsertById(prev, row)),

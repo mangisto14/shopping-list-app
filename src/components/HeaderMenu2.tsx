@@ -8,11 +8,13 @@ import {
   QueueListIcon,
 } from '@heroicons/react/24/outline'
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { WrenchScrewdriverIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../LanguageContext';
 import { appLabels } from '../i18n/app';
 import { listsLabels } from '../i18n/lists';
 import { supabase } from '../supabase/client';
+import { isDevToolsEnabled } from '../devtools';
 
 export default function HeaderMenu() {
     
@@ -36,6 +38,9 @@ export default function HeaderMenu() {
   { name: tLists.title, href: '/lists', icon: QueueListIcon },
   { name: t.categories_title, href: '/categories', icon: RectangleGroupIcon },
   { name: t.history_title, href: '/history', icon: ArchiveBoxIcon },
+  // Dev/QA only - never shown in an ordinary production build. See
+  // src/devtools/index.ts.
+  ...(isDevToolsEnabled() ? [{ name: 'Developer Console', href: '/dev-settings', icon: WrenchScrewdriverIcon }] : []),
 
 ]
   return (

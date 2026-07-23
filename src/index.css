@@ -1,3 +1,37 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Developer Console > UI Debug. Only ever applied via a class toggled
+   on <html> by src/components/dev/UiDebugOverlay.tsx, which is itself
+   only mounted when isDevSettingsEnabled() - see App.jsx. Dead weight
+   (a few unused CSS rules) in a production bundle, never active. */
+.dev-debug-borders * {
+  outline: 1px dashed rgba(239, 68, 68, 0.45) !important;
+  outline-offset: -1px;
+}
+
+.dev-debug-touch button,
+.dev-debug-touch a,
+.dev-debug-touch input,
+.dev-debug-touch [role='button'] {
+  outline: 1px solid rgba(37, 99, 235, 0.6) !important;
+  outline-offset: 1px;
+  background-color: rgba(37, 99, 235, 0.08);
+}
+
+@keyframes dev-debug-rerender-flash {
+  0% {
+    outline: 2px solid rgba(234, 179, 8, 0.9);
+    background-color: rgba(234, 179, 8, 0.18);
+  }
+  100% {
+    outline: 2px solid rgba(234, 179, 8, 0);
+    background-color: rgba(234, 179, 8, 0);
+  }
+}
+
+.dev-debug-rerender-flash {
+  animation: dev-debug-rerender-flash 500ms ease-out;
+  pointer-events: none;
+}

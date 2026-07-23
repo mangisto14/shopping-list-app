@@ -5,6 +5,7 @@ import { useAuth } from './useAuth';
 import { useActiveList } from '../ActiveListContext';
 import { useRealtimeTable } from './useRealtimeTable';
 import { upsertById, removeById } from './realtimeUtils';
+import { useForceSyncListener } from '../devtools';
 
 export interface ListMemberRow {
   id: string;
@@ -67,6 +68,8 @@ export function useMembers() {
   useEffect(() => {
     fetchMembers();
   }, [fetchMembers]);
+
+  useForceSyncListener(fetchMembers);
 
   useRealtimeTable<ListMemberRow>('list_members', activeListId, {
     onInsert: (row) => setRows((prev) => upsertById(prev, row)),

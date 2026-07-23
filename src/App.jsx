@@ -1,4 +1,5 @@
 // src/App.tsx
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -10,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import Statistics from './pages/Statistics';
 import FamilyMembers from './pages/FamilyMembers';
 
+import { isDevToolsEnabled, DeveloperConsolePage, DevToolsOverlay, useDevTools } from './devtools';
 import { useAuth } from './hooks/useAuth';
 import { useLanguage } from './LanguageContext';
 import { ActiveListProvider } from './ActiveListContext';
@@ -21,6 +23,30 @@ export default function App() {
     <BrowserRouter>
       <AppShell />
     </BrowserRouter>
+  );
+}
+
+// Fades route content in on every path change - Developer Console's
+// Animations > Page Transition setting. A plain opacity fade, not a
+// routing library: this app's own <Routes> already own mount/unmount,
+// this only wraps the result.
+// No prop-types package in this project; no other component declares them either.
+// eslint-disable-next-line react/prop-types
+function PageFade({ children }) {
+  const { animations } = useDevTools();
+  const location = useLocation();
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    setVisible(false);
+    const id = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, [location.pathname]);
+
+  return (
+    <div style={{ opacity: visible ? 1 : 0, transition: `opacity ${animations.pageTransitionDuration}ms ease-out` }}>
+      {children}
+    </div>
   );
 }
 
@@ -43,6 +69,7 @@ function AppShell() {
       <Route path="/categories" element={<CategoriesPage />} />
       <Route path="/lists" element={<ListsPage />} />
       <Route path="/history" element={<HistoryPage />} />
+      {isDevToolsEnabled() && <Route path="/dev-settings" element={<DeveloperConsolePage />} />}
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
@@ -79,17 +106,22 @@ function AppShell() {
         className={`w-full max-w-md px-4 ${user ? (isShoppingListRoute ? '' : 'pb-28') : 'py-4'}`}
       >
         {user ? (
-          <ActiveListProvider>{authenticatedRoutes}</ActiveListProvider>
+          <ActiveListProvider>
+            <PageFade>{authenticatedRoutes}</PageFade>
+          </ActiveListProvider>
         ) : (
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="*" element={<Navigate to="/login" />} />
-          </Routes>
+          <PageFade>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="*" element={<Navigate to="/login" />} />
+            </Routes>
+          </PageFade>
         )}
       </div>
 
       {user && <BottomNav />}
+      {isDevToolsEnabled() && <DevToolsOverlay />}
     </div>
   );
 }

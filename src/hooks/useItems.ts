@@ -5,6 +5,7 @@ import { useAuth } from './useAuth';
 import { useActiveList } from '../ActiveListContext';
 import { useRealtimeTable } from './useRealtimeTable';
 import { upsertById, removeById } from './realtimeUtils';
+import { useForceSyncListener } from '../devtools';
 
 export interface Item {
   id: string;
@@ -42,6 +43,8 @@ export function useItems() {
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
+
+  useForceSyncListener(fetchItems);
 
   useRealtimeTable<Item>('items', activeListId, {
     onInsert: (row) => setItems((prev) => upsertById(prev, row)),
