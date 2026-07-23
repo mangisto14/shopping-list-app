@@ -142,5 +142,9 @@ test('disabling the Enable Swipe Delete flag replaces swipe with a plain delete 
   const deleteButton = page.getByRole('button', { name: 'מחיקת פריט' });
   await expect(deleteButton).toBeVisible();
   await deleteButton.click();
-  await expect(page.getByText('חלב 3%')).toHaveCount(0);
+  // Scoped to the delete button itself, not a page-wide text search:
+  // the Undo snackbar (enableUndoSnackbar defaults to true here) shows
+  // "{item} נמחק", which also contains the item's name - see the same
+  // fix already applied in interaction-regressions.spec.ts.
+  await expect(deleteButton).toHaveCount(0);
 });

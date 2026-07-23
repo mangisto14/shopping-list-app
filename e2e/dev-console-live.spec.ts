@@ -16,8 +16,12 @@ test('the Developer Console is reachable when VITE_ENABLE_DEV_SETTINGS=true', as
   await page.goto('/dev-settings');
   await expect(page.getByRole('heading', { name: 'Developer Console' })).toBeVisible();
 
+  // The menu overlays on top of the still-mounted page underneath (the
+  // page itself doesn't unmount), so both the heading and the menu's
+  // own link end up in the DOM together - target the link specifically
+  // rather than an ambiguous page-wide text search.
   await page.getByRole('button', { name: 'תפריט ניווט' }).click();
-  await expect(page.getByText('Developer Console')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Developer Console' })).toBeVisible();
 });
 
 test('changing revealThreshold applies immediately, and survives a client-side navigation with no page reload', async ({ page }) => {
@@ -42,20 +46,20 @@ test('changing revealThreshold applies immediately, and survives a client-side n
   await numberInput.blur();
   await expect(rangeInput).toHaveValue('35');
 
-  // Track navigation count to prove what follows is client-side
-  // routing, not a fresh document load.
-  const navigations: string[] = [];
-  page.on('framenavigated', (frame) => {
-    if (frame === page.mainFrame()) navigations.push(frame.url());
+  // A marker in the live JS context, not a navigation-event count:
+  // Playwright's `framenavigated` fires for client-side History API
+  // route changes too, not just real document loads, so it can't tell
+  // them apart. A real reload creates a fresh window/JS context and
+  // would wipe this; a client-side route swap (same document) can't.
+  await page.evaluate(() => {
+    (window as unknown as { __e2eMarker: string }).__e2eMarker = 'still-here';
   });
 
   await page.getByRole('button', { name: 'תפריט ניווט' }).click();
   await page.getByRole('link', { name: 'רשימת קניות' }).click();
   await expect(page).toHaveURL('/');
 
-  // A client-side route swap doesn't fire a real navigation event the
-  // way page.goto()/a reload would - confirms no reload happened.
-  expect(navigations.length).toBe(0);
+  expect(await page.evaluate(() => (window as unknown as { __e2eMarker?: string }).__e2eMarker)).toBe('still-here');
 
   // Second row - the first plays a one-time auto entry-hint animation
   // (ItemCard.tsx's playEntryHint) that could otherwise race with this
