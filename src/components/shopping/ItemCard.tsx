@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { Item } from '../../hooks/useItems';
 import { getCategoryStyle } from '../../theme/categoryStyles';
+import { useSwipeSettings } from '../../config/devSettings';
 
 interface ItemCardProps {
   item: Item;
@@ -31,12 +32,12 @@ interface ItemCardProps {
   playEntryHint?: boolean;
 }
 
-// Swipe-to-delete tuning. REVEAL is where the row snaps to when the user
-// lets go mid-drag (far enough to show the action, not far enough to
-// delete); DELETE_THRESHOLD is "dragged far enough that the drag itself
-// is the confirmation" (no second tap needed, matching iOS Mail's full-
-// swipe behavior).
-const REVEAL_PX = 80;
+// Swipe-to-delete tuning. revealThreshold (dev-settings, default 80px)
+// is where the row snaps to when the user lets go mid-drag (far enough
+// to show the action, not far enough to delete); DELETE_THRESHOLD is
+// "dragged far enough that the drag itself is the confirmation" (no
+// second tap needed, matching iOS Mail's full-swipe behavior). Only
+// revealThreshold is dev-tunable for now - see src/config/devSettings.ts.
 const DELETE_THRESHOLD_PX = 180;
 const MAX_DRAG_PX = 220;
 
@@ -44,10 +45,9 @@ const MAX_DRAG_PX = 220;
 // height so the rows below animate upward instead of snapping into
 // place. Both phases play out locally in this component before onDelete
 // fires, so by the time the parent actually removes the item the row is
-// already invisible/zero-height - no jump cut.
+// already invisible/zero-height - no jump cut. Both phases share the
+// same dev-tunable animationDuration (default 220ms).
 const SLIDE_OUT_PX = 420;
-const SLIDE_FADE_MS = 220;
-const COLLAPSE_MS = 220;
 
 // Entry hint: a one-time nudge shortly after the row mounts, teaching
 // the swipe-right-to-delete gesture without feeling like a tutorial.
@@ -83,6 +83,7 @@ const ROW_SHADOW_DRAG = 'shadow-[0_3px_6px_rgba(15,23,42,0.08),0_10px_24px_rgba(
 // the hood, this is a display/interaction grouping only.
 
 export default function ItemCard({ item, count, categoryName, onToggle, onDelete, onRename, onIncrement, onDecrement, playEntryHint = false }: ItemCardProps) {
+  const swipeSettings = useSwipeSettings();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(item.name);
   const [translateX, setTranslateX] = useState(0);
@@ -99,8 +100,25 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
   const isScrollGesture = useRef(false);
   const hasCaptured = useRef(false);
   const hasVibratedThreshold = useRef(false);
+  // Dev-settings-only: schedules closeSwipe() after autoCloseDelay ms
+  // once a row is left open (revealed, undeleted). autoCloseDelay
+  // defaults to 0 (disabled), matching this component's pre-existing
+  // behavior of never auto-closing on its own.
+  const autoCloseTimer = useRef<number | null>(null);
 
-  const closeSwipe = () => setTranslateX(0);
+  const clearAutoCloseTimer = () => {
+    if (autoCloseTimer.current !== null) {
+      window.clearTimeout(autoCloseTimer.current);
+      autoCloseTimer.current = null;
+    }
+  };
+
+  useEffect(() => clearAutoCloseTimer, []);
+
+  const closeSwipe = () => {
+    clearAutoCloseTimer();
+    setTranslateX(0);
+  };
 
   const handleSave = () => {
     const trimmed = name.trim();
@@ -134,11 +152,12 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
   }, []);
 
   const triggerDelete = () => {
+    clearAutoCloseTimer();
     const reduced = prefersReducedMotion();
     setIsDeleting(true);
     setTranslateX(reduced ? translateX : SLIDE_OUT_PX);
-    const slideMs = reduced ? 0 : SLIDE_FADE_MS;
-    const collapseMs = reduced ? 80 : COLLAPSE_MS;
+    const slideMs = reduced ? 0 : swipeSettings.animationDuration;
+    const collapseMs = reduced ? 80 : swipeSettings.animationDuration;
     window.setTimeout(() => setCollapsed(true), slideMs);
     window.setTimeout(onDelete, slideMs + collapseMs);
   };
@@ -158,6 +177,7 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
     isScrollGesture.current = false;
     hasCaptured.current = false;
     hasVibratedThreshold.current = false;
+    clearAutoCloseTimer();
     setHinting(false);
     setDragging(true);
     // Deliberately NOT capturing the pointer here. Chromium retargets
@@ -237,8 +257,12 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
 
     if (translateX >= DELETE_THRESHOLD_PX) {
       triggerDelete();
-    } else if (translateX >= REVEAL_PX / 2) {
-      setTranslateX(REVEAL_PX);
+    } else if (translateX >= swipeSettings.revealThreshold / 2) {
+      setTranslateX(swipeSettings.revealThreshold);
+      if (swipeSettings.autoCloseDelay > 0) {
+        clearAutoCloseTimer();
+        autoCloseTimer.current = window.setTimeout(closeSwipe, swipeSettings.autoCloseDelay);
+      }
     } else {
       setTranslateX(0);
     }
@@ -302,7 +326,7 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
     );
   }
 
-  const revealProgress = Math.min(1, translateX / REVEAL_PX);
+  const revealProgress = Math.min(1, translateX / swipeSettings.revealThreshold);
   const pastThreshold = translateX >= DELETE_THRESHOLD_PX;
   const iconScale = pastThreshold ? 1.15 : 0.8 + 0.2 * revealProgress;
 
@@ -312,7 +336,7 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
       style={{
         overflow: 'hidden',
         maxHeight: collapsed ? 0 : 96,
-        transitionDuration: `${collapsed ? COLLAPSE_MS : SLIDE_FADE_MS}ms`,
+        transitionDuration: `${swipeSettings.animationDuration}ms`,
       }}
     >
       {/* Delete action, fixed at the left edge, revealed as the row
@@ -346,13 +370,14 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
       </div>
 
       <div
+        data-testid="item-row"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         style={{
           transform: `translateX(${translateX}px)`,
-          transition: dragging ? 'none' : `transform ${hinting ? ENTRY_HINT_TRANSITION_MS : 180}ms ease-out`,
+          transition: dragging ? 'none' : `transform ${hinting ? ENTRY_HINT_TRANSITION_MS : swipeSettings.revealDuration}ms ease-out`,
           touchAction: 'pan-y',
         }}
         className={`relative flex items-center gap-2.5 overflow-hidden ${ROW_BASE} ${dragging ? ROW_SHADOW_DRAG : ROW_SHADOW_REST}`}

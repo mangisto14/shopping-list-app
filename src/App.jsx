@@ -9,7 +9,9 @@ import ListsPage from './pages/Lists';
 import Dashboard from './pages/Dashboard';
 import Statistics from './pages/Statistics';
 import FamilyMembers from './pages/FamilyMembers';
+import DevSettings from './pages/DevSettings';
 
+import { isDevSettingsEnabled } from './config/devSettings';
 import { useAuth } from './hooks/useAuth';
 import { useLanguage } from './LanguageContext';
 import { ActiveListProvider } from './ActiveListContext';
@@ -43,6 +45,7 @@ function AppShell() {
       <Route path="/categories" element={<CategoriesPage />} />
       <Route path="/lists" element={<ListsPage />} />
       <Route path="/history" element={<HistoryPage />} />
+      {isDevSettingsEnabled() && <Route path="/dev-settings" element={<DevSettings />} />}
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
