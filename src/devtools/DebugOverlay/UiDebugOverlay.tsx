@@ -1,12 +1,12 @@
-// src/components/dev/UiDebugOverlay.tsx
-// Renders every "UI Debug" toggle from the Developer Console
-// (src/config/uiDebugSettings.ts) as a real, working visual aid.
-// Mounted exactly once, at the app root, only when
-// isDevSettingsEnabled() - see App.jsx. When every toggle is off (the
-// default), this component does nothing observable: no classes are
-// added, no overlay elements render, no observer is created.
+// src/devtools/DebugOverlay/UiDebugOverlay.tsx
+// Renders every "UI Debug" toggle as a real, working visual aid.
+// Mounted exactly once, at the app root, only when isDevToolsEnabled()
+// - see src/devtools/index.ts's DevToolsOverlay and App.jsx. When
+// every toggle is off (the default), this component does nothing
+// observable: no classes are added, no overlay elements render, no
+// observer is created.
 import { useEffect, useRef } from 'react';
-import { useDeveloperConsole } from '../../config/DeveloperConsoleContext';
+import { uiDebugStore } from './store';
 
 const BORDERS_CLASS = 'dev-debug-borders';
 const TOUCH_CLASS = 'dev-debug-touch';
@@ -14,7 +14,7 @@ const FLASH_CLASS = 'dev-debug-rerender-flash';
 const FLASH_MS = 500;
 
 export default function UiDebugOverlay() {
-  const { uiDebug } = useDeveloperConsole();
+  const uiDebug = uiDebugStore.useValue();
   const observerRef = useRef<MutationObserver | null>(null);
 
   // Component borders / touch-area outlines: plain global CSS classes

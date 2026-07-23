@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { Item } from '../../hooks/useItems';
 import { getCategoryStyle } from '../../theme/categoryStyles';
-import { useDeveloperConsole } from '../../config/DeveloperConsoleContext';
+import { useDevTools } from '../../devtools';
 
 interface ItemCardProps {
   item: Item;
@@ -37,7 +37,7 @@ interface ItemCardProps {
 // to show the action, not far enough to delete); DELETE_THRESHOLD is
 // "dragged far enough that the drag itself is the confirmation" (no
 // second tap needed, matching iOS Mail's full-swipe behavior). Only
-// revealThreshold is dev-tunable for now - see src/config/devSettings.ts.
+// revealThreshold is dev-tunable for now - see src/devtools/Swipe/store.ts.
 const DELETE_THRESHOLD_PX = 180;
 const MAX_DRAG_PX = 220;
 
@@ -83,7 +83,7 @@ const ROW_SHADOW_DRAG = 'shadow-[0_3px_6px_rgba(15,23,42,0.08),0_10px_24px_rgba(
 // the hood, this is a display/interaction grouping only.
 
 export default function ItemCard({ item, count, categoryName, onToggle, onDelete, onRename, onIncrement, onDecrement, playEntryHint = false }: ItemCardProps) {
-  const { swipe: swipeSettings, featureFlags } = useDeveloperConsole();
+  const { swipe: swipeSettings, featureFlags } = useDevTools();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(item.name);
   const [translateX, setTranslateX] = useState(0);

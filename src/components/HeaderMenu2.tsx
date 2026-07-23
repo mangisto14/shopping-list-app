@@ -14,7 +14,7 @@ import { useLanguage } from '../LanguageContext';
 import { appLabels } from '../i18n/app';
 import { listsLabels } from '../i18n/lists';
 import { supabase } from '../supabase/client';
-import { isDevSettingsEnabled } from '../config/devSettings';
+import { isDevToolsEnabled } from '../devtools';
 
 export default function HeaderMenu() {
     
@@ -39,8 +39,8 @@ export default function HeaderMenu() {
   { name: t.categories_title, href: '/categories', icon: RectangleGroupIcon },
   { name: t.history_title, href: '/history', icon: ArchiveBoxIcon },
   // Dev/QA only - never shown in an ordinary production build. See
-  // src/config/devSettings.ts.
-  ...(isDevSettingsEnabled() ? [{ name: 'Developer Console', href: '/dev-settings', icon: WrenchScrewdriverIcon }] : []),
+  // src/devtools/index.ts.
+  ...(isDevToolsEnabled() ? [{ name: 'Developer Console', href: '/dev-settings', icon: WrenchScrewdriverIcon }] : []),
 
 ]
   return (

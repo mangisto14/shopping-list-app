@@ -1,6 +1,6 @@
 // src/components/ui/BottomSheet.tsx
 import { useEffect, useState, type ReactNode } from 'react';
-import { useDeveloperConsole } from '../../config/DeveloperConsoleContext';
+import { useDevTools } from '../../devtools';
 
 interface BottomSheetProps {
   open: boolean;
@@ -37,7 +37,7 @@ const HEIGHT_FRACTION = 0.75; // 72-75vh target from the design spec
 // `visualViewport` isn't available (older browsers) - progressive
 // enhancement, not a requirement.
 export default function BottomSheet({ open, onClose, title, children, footer }: BottomSheetProps) {
-  const { animations } = useDeveloperConsole();
+  const { animations } = useDevTools();
   const [visible, setVisible] = useState(false);
   const [viewport, setViewport] = useState<{ height: number; offsetTop: number } | null>(null);
 

@@ -2,7 +2,7 @@
 import InviteLinkCard from './InviteLinkCard';
 import InviteByEmailForm from './InviteByEmailForm';
 import BottomSheet from '../ui/BottomSheet';
-import { useDeveloperConsole } from '../../config/DeveloperConsoleContext';
+import { useDevTools } from '../../devtools';
 
 interface InviteMemberModalProps {
   open: boolean;
@@ -12,10 +12,10 @@ interface InviteMemberModalProps {
 
 export default function InviteMemberModal({ open, onClose, onInvite }: InviteMemberModalProps) {
   // Dev/QA feature flag, defaults to true (today's shipped behavior
-  // unchanged) - see src/config/featureFlags.ts. Never disabled by
-  // this code itself; only a developer flipping it in the Developer
+  // unchanged) - see src/devtools/FeatureFlags/store.ts. Never disabled
+  // by this code itself; only a developer flipping it in the Developer
   // Console can turn email invite off.
-  const { featureFlags } = useDeveloperConsole();
+  const { featureFlags } = useDevTools();
 
   return (
     <BottomSheet open={open} onClose={onClose} title="הזמנת בני משפחה או שותפים לדירה">

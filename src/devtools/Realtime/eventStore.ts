@@ -1,8 +1,8 @@
-// src/config/realtimeDebugStore.ts
-// Dev/QA-only "last realtime event" tracker. useRealtimeTable.ts calls
-// recordRealtimeEvent() from each INSERT/UPDATE/DELETE handler, gated
-// by isDevSettingsEnabled() so this is a no-op (not even called) in an
-// ordinary production build - see that file for the call site.
+// src/devtools/Realtime/eventStore.ts
+// Dev/QA-only "last realtime event" tracker. src/hooks/useRealtimeTable.ts
+// calls recordRealtimeEvent() from each INSERT/UPDATE/DELETE handler,
+// gated by isDevToolsEnabled() at the call site so this is a no-op
+// (not even called) in an ordinary production build.
 import { useSyncExternalStore } from 'react';
 
 export interface RealtimeEventLog {
@@ -15,7 +15,7 @@ export interface RealtimeEventLog {
 let lastEvent: RealtimeEventLog | null = null;
 const listeners = new Set<() => void>();
 
-export function recordRealtimeEvent(entry: Omit<RealtimeEventLog, 'at'>) {
+export function recordRealtimeEvent(entry: Omit<RealtimeEventLog, 'at'>): void {
   lastEvent = { ...entry, at: new Date().toISOString() };
   listeners.forEach((listener) => listener());
 }

@@ -1,8 +1,8 @@
 // e2e/dev-settings.spec.ts
-// Coverage for the dev/QA-only Developer Console
-// (src/pages/DeveloperConsole.tsx, src/config/devSettings.ts) and its
-// effect on ItemCard.tsx's swipe-to-delete behavior. This suite always
-// runs against a standard production build (no VITE_ENABLE_DEV_SETTINGS,
+// Coverage for the dev/QA-only Developer Console (src/devtools/) and
+// its effect on business components (ItemCard.tsx's swipe-to-delete,
+// InviteMemberModal.tsx's email invite). This suite always runs
+// against a standard production build (no VITE_ENABLE_DEV_SETTINGS,
 // import.meta.env.DEV false - see playwright.config.ts), so the first
 // test doubles as the "hidden in production" verification: if the gate
 // were ever broken open, this build would be the one to catch it.
@@ -147,4 +147,19 @@ test('disabling the Enable Swipe Delete flag replaces swipe with a plain delete 
   // "{item} נמחק", which also contains the item's name - see the same
   // fix already applied in interaction-regressions.spec.ts.
   await expect(deleteButton).toHaveCount(0);
+});
+
+test('disabling the Enable Demo Mode flag (renamed from Enable Demo Animation) skips straight to the empty state', async ({ page }) => {
+  await seedAuthSession(page);
+  await page.addInitScript(
+    ({ key, value }) => localStorage.setItem(key, value),
+    { key: FEATURE_FLAGS_KEY, value: JSON.stringify({ enableDemoMode: false }) }
+  );
+  await mockListData(page, { categories: [], items: [] });
+
+  await page.goto('/');
+  // With the flag on (the default), DemoItemRow's fixed "חלב 3%" demo
+  // label would render first and only fade to this real empty state
+  // after its own animation finishes. With it off, this appears right away.
+  await expect(page.getByText('הרשימה ריקה')).toBeVisible();
 });

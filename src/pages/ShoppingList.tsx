@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import UndoSnackbar from '../components/shopping/UndoSnackbar';
 import DemoItemRow from '../components/shopping/DemoItemRow';
-import { useDeveloperConsole } from '../config/DeveloperConsoleContext';
+import { useDevTools } from '../devtools';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
@@ -107,7 +107,7 @@ export default function ShoppingList() {
   const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
   const { categories } = useCategories();
   const { members: realMembers, currentUserId, inviteMember } = useMembers();
-  const { featureFlags, animations } = useDeveloperConsole();
+  const { featureFlags, animations } = useDevTools();
 
   const [input, setInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -372,10 +372,10 @@ export default function ShoppingList() {
   // Feature Flags > Enable Demo Animation) - otherwise the empty state
   // below, which only fades in once demoRowDone is true, would never
   // appear at all with the demo row skipped.
-  const [demoRowDone, setDemoRowDone] = useState(!featureFlags.enableDemoAnimation);
+  const [demoRowDone, setDemoRowDone] = useState(!featureFlags.enableDemoMode);
   useEffect(() => {
-    if (visibleItems.length > 0) setDemoRowDone(!featureFlags.enableDemoAnimation);
-  }, [visibleItems.length, featureFlags.enableDemoAnimation]);
+    if (visibleItems.length > 0) setDemoRowDone(!featureFlags.enableDemoMode);
+  }, [visibleItems.length, featureFlags.enableDemoMode]);
 
   // Fade the empty state in once the demo row (if any) has finished,
   // rather than snapping straight to it.
@@ -581,7 +581,7 @@ export default function ShoppingList() {
         style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom) + 16px)' }}
       >
         {visibleItems.length === 0 ? (
-          featureFlags.enableDemoAnimation && !demoRowDone ? (
+          featureFlags.enableDemoMode && !demoRowDone ? (
             <DemoItemRow label="חלב 3%" onFinished={() => setDemoRowDone(true)} />
           ) : (
             <div className={`transition-opacity duration-300 ${emptyStateVisible ? 'opacity-100' : 'opacity-0'}`}>

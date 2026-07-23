@@ -1,7 +1,7 @@
 // src/components/shopping/CategorySection.tsx
 import type { ReactNode } from 'react';
 import { getCategoryStyle } from '../../theme/categoryStyles';
-import { useDeveloperConsole } from '../../config/DeveloperConsoleContext';
+import { useDevTools } from '../../devtools';
 
 interface CategorySectionProps {
   categoryName: string | null; // null = uncategorized
@@ -18,7 +18,7 @@ interface CategorySectionProps {
 // component stays purely about the group chrome/collapse behavior.
 export default function CategorySection({ categoryName, count, expanded, onToggleExpanded, children }: CategorySectionProps) {
   const style = getCategoryStyle(categoryName);
-  const { animations } = useDeveloperConsole();
+  const { animations } = useDevTools();
 
   return (
     <div>

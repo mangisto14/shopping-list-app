@@ -9,8 +9,7 @@ import type {
   RealtimePostgresUpdatePayload,
   RealtimePostgresDeletePayload,
 } from '@supabase/supabase-js';
-import { isDevSettingsEnabled } from '../config/devSettings';
-import { recordRealtimeEvent } from '../config/realtimeDebugStore';
+import { isDevToolsEnabled, recordRealtimeEvent } from '../devtools';
 
 interface RealtimeHandlers<T extends { id: string }> {
   onInsert: (row: T) => void;
@@ -35,11 +34,11 @@ export function useRealtimeTable<T extends { id: string }>(
     if (!listId) return;
 
     // Dev/QA-only: feeds the Developer Console's Realtime Debug panel
-    // ("Last Realtime Event"). isDevSettingsEnabled() short-circuits
-    // this to nothing in a production build - recordRealtimeEvent()
-    // isn't even called, let alone its (trivial) cost paid.
+    // ("Last Realtime Event"). isDevToolsEnabled() short-circuits this
+    // to nothing in a production build - recordRealtimeEvent() isn't
+    // even called, let alone its (trivial) cost paid.
     const devRecord = (event: 'INSERT' | 'UPDATE' | 'DELETE') => {
-      if (isDevSettingsEnabled()) recordRealtimeEvent({ table, event, listId });
+      if (isDevToolsEnabled()) recordRealtimeEvent({ table, event, listId });
     };
 
     const channel = supabase

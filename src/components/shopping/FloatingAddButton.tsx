@@ -1,13 +1,13 @@
 // src/components/shopping/FloatingAddButton.tsx
 import { useState } from 'react';
-import { useDeveloperConsole } from '../../config/DeveloperConsoleContext';
+import { useDevTools } from '../../devtools';
 
 interface FloatingAddButtonProps {
   onClick: () => void;
 }
 
 export default function FloatingAddButton({ onClick }: FloatingAddButtonProps) {
-  const { animations } = useDeveloperConsole();
+  const { animations } = useDevTools();
   const [pulsing, setPulsing] = useState(false);
 
   const handleClick = () => {

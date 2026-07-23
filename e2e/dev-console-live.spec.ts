@@ -35,13 +35,13 @@ test('changing revealThreshold applies immediately, and survives a client-side n
   });
 
   await page.goto('/dev-settings');
-  const numberInput = page.getByLabel('revealThreshold value');
-  const rangeInput = page.getByLabel('revealThreshold slider');
+  const numberInput = page.getByLabel('Reveal Threshold value');
+  const rangeInput = page.getByLabel('Reveal Threshold slider');
 
   // Live update, no reload, within the console itself: the number
   // input and range slider are two independent DOM controls bound to
-  // the same underlying store (useDeveloperConsole().swipe) - typing
-  // into one updates the other instantly.
+  // the same underlying store (useDevTools().swipe) - typing into one
+  // updates the other instantly.
   await numberInput.fill('35');
   await numberInput.blur();
   await expect(rangeInput).toHaveValue('35');
@@ -85,9 +85,79 @@ test('settings persist after a real reload', async ({ page }) => {
   await mockListData(page, { categories: [], items: [] });
 
   await page.goto('/dev-settings');
-  await page.getByLabel('animationDuration value').fill('777');
-  await page.getByLabel('animationDuration value').blur();
+  await page.getByLabel('Animation Duration value').fill('777');
+  await page.getByLabel('Animation Duration value').blur();
 
   await page.reload();
-  await expect(page.getByLabel('animationDuration value')).toHaveValue('777');
+  await expect(page.getByLabel('Animation Duration value')).toHaveValue('777');
+});
+
+test('new sections (Appearance, Network Simulation, Mock Data) render; removed sections do not', async ({ page }) => {
+  await seedAuthSession(page);
+  await mockListData(page, { categories: [], items: [] });
+
+  await page.goto('/dev-settings');
+
+  await page.getByRole('button', { name: 'Appearance' }).click();
+  await expect(page.getByRole('radiogroup', { name: 'Direction' })).toBeVisible();
+  await expect(page.getByRole('radiogroup', { name: 'Theme' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Network Simulation' }).click();
+  await expect(page.getByRole('radiogroup', { name: 'Network Mode' })).toBeVisible();
+  await expect(page.getByRole('switch', { name: 'Disable Realtime' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Mock Data' }).click();
+  await expect(page.getByRole('button', { name: 'Create Demo Shopping List' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create Demo Categories' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create Demo Family' })).toBeVisible();
+
+  // Removed for this release - destructive DB operations and the
+  // performance monitor are gone from the codebase entirely, not just
+  // hidden behind a toggle.
+  await expect(page.getByText('Database Utilities')).toHaveCount(0);
+  await expect(page.getByText('Performance', { exact: false })).toHaveCount(0);
+  await expect(page.getByText('FPS')).toHaveCount(0);
+  await expect(page.getByText('Render Count')).toHaveCount(0);
+});
+
+test('search filters to matching rows, and Favorites only isolates pinned settings', async ({ page }) => {
+  await seedAuthSession(page);
+  await mockListData(page, { categories: [], items: [] });
+
+  await page.goto('/dev-settings');
+
+  await page.getByPlaceholder('Search settings…').fill('haptics');
+  await expect(page.getByRole('switch', { name: 'Haptics' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Swipe Settings' })).toHaveCount(0);
+  await page.getByPlaceholder('Search settings…').fill('');
+
+  // Pin "Haptics" specifically (Swipe Settings is also expanded by
+  // default and has its own pin buttons, so this can't just grab the
+  // first pin button on the page), then isolate to favorites only -
+  // every other section (which has nothing pinned) should disappear.
+  await page.getByRole('button', { name: 'Feature Flags' }).click();
+  const hapticsRow = page.getByRole('switch', { name: 'Haptics' }).locator('xpath=ancestor::div[contains(@class, "justify-between")][1]');
+  await hapticsRow.getByRole('button', { name: 'Pin to favorites' }).click();
+  await page.getByRole('button', { name: /Favorites only/ }).click();
+
+  await expect(page.getByRole('switch', { name: 'Haptics' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Environment' })).toHaveCount(0);
+});
+
+test('resetting a single field only affects that field', async ({ page }) => {
+  await seedAuthSession(page);
+  await mockListData(page, { categories: [], items: [] });
+
+  await page.goto('/dev-settings');
+
+  await page.getByLabel('Reveal Threshold value').fill('150');
+  await page.getByLabel('Reveal Duration value').fill('900');
+
+  // Nearest ancestor div carrying SliderRow's own root class (not some
+  // larger outer container that also "has" this input as a descendant).
+  const revealThresholdRow = page.getByLabel('Reveal Threshold value').locator('xpath=ancestor::div[contains(@class, "space-y-2")][1]');
+  await revealThresholdRow.getByRole('button', { name: 'Reset' }).click();
+
+  await expect(page.getByLabel('Reveal Threshold value')).toHaveValue('80'); // back to default
+  await expect(page.getByLabel('Reveal Duration value')).toHaveValue('900'); // untouched
 });

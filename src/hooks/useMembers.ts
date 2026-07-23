@@ -5,7 +5,7 @@ import { useAuth } from './useAuth';
 import { useActiveList } from '../ActiveListContext';
 import { useRealtimeTable } from './useRealtimeTable';
 import { upsertById, removeById } from './realtimeUtils';
-import { useForceSyncListener } from '../config/forceSync';
+import { useForceSyncListener } from '../devtools';
 
 export interface ListMemberRow {
   id: string;
