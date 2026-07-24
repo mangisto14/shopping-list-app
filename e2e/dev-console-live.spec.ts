@@ -80,6 +80,37 @@ test('changing revealThreshold applies immediately, and survives a client-side n
   await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 35, 0\)/);
 });
 
+test('Discovery Hint Hold Duration is configurable from the console and controls how long the automatic hint stays open', async ({ page }) => {
+  await seedAuthSession(page);
+  await mockListData(page, {
+    categories: [{ id: CAT_DAIRY, list_id: LIST_ID, user_id: USER_ID, name: 'מוצרי חלב' }],
+    items: [{ id: 'e2e-item-1', list_id: LIST_ID, user_id: USER_ID, category_id: CAT_DAIRY, name: 'חלב 3%', is_done: false, position: 0 }],
+  });
+
+  await page.goto('/dev-settings');
+  const numberInput = page.getByLabel('Discovery Hint Hold Duration value');
+  const rangeInput = page.getByLabel('Discovery Hint Hold Duration slider');
+
+  await numberInput.fill('2000');
+  await numberInput.blur();
+  await expect(rangeInput).toHaveValue('2000');
+
+  await page.getByRole('button', { name: 'תפריט ניווט' }).click();
+  await page.getByRole('link', { name: 'רשימת קניות' }).click();
+  await expect(page).toHaveURL('/');
+
+  // Only row in the list - the one playEntryHint plays on.
+  const row = page.locator('[data-testid="item-row"]').first();
+
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 80, 0\)/, { timeout: 1500 });
+  // Still open ~1.7s in - the default 500ms hold would already have
+  // closed by ~1440ms, so this proves the console's 2000ms value is
+  // what's actually driving the hint, live, in a different component.
+  await page.waitForTimeout(1000);
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 80, 0\)/);
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 0, 0\)/, { timeout: 2000 });
+});
+
 test('settings persist after a real reload', async ({ page }) => {
   await seedAuthSession(page);
   await mockListData(page, { categories: [], items: [] });

@@ -17,6 +17,12 @@ export interface SwipeSettings {
   autoCloseDelay: number;
   // ms - duration of the delete slide/fade/collapse choreography.
   animationDuration: number;
+  // ms - how long the one-time automatic discovery hint (ItemCard.tsx's
+  // playEntryHint) stays fully revealed at revealThreshold before
+  // sliding closed again. Affects ONLY that one-time hint animation -
+  // revealThreshold itself, real swipe/drag behavior, and delete logic
+  // are untouched by this setting.
+  discoveryHintHoldMs: number;
 }
 
 export const DEFAULT_SWIPE_SETTINGS: SwipeSettings = {
@@ -24,6 +30,7 @@ export const DEFAULT_SWIPE_SETTINGS: SwipeSettings = {
   revealDuration: 180,
   autoCloseDelay: 0,
   animationDuration: 220,
+  discoveryHintHoldMs: 500,
 };
 
 export const swipeStore = createDevStore('dev-settings:swipe', DEFAULT_SWIPE_SETTINGS);

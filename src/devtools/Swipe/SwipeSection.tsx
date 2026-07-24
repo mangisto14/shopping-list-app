@@ -47,6 +47,15 @@ export default function SwipeSection({
           onReset={() => swipeStore.resetField('animationDuration')}
         />
       )}
+      {matches('Discovery Hint Hold Duration', 'swipe.discoveryHintHoldMs') && (
+        <SliderRow
+          id="swipe.discoveryHintHoldMs" label="Discovery Hint Hold Duration" unit="ms"
+          hint="How long the one-time automatic discovery hint stays fully revealed before closing. Affects only that hint, not real swipe behavior."
+          value={swipe.discoveryHintHoldMs} min={0} max={5000} step={100}
+          onChange={(v) => swipeStore.set({ discoveryHintHoldMs: v })}
+          onReset={() => swipeStore.resetField('discoveryHintHoldMs')}
+        />
+      )}
       <div className="px-4 py-3">
         <ActionButton label="Restore Defaults" onClick={() => swipeStore.reset()} />
       </div>

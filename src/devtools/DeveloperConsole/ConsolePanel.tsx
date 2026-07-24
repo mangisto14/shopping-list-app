@@ -121,6 +121,7 @@ export default function ConsolePanel() {
           { label: 'Reveal Duration', id: 'swipe.revealDuration' },
           { label: 'Auto Close Delay', id: 'swipe.autoCloseDelay' },
           { label: 'Animation Duration', id: 'swipe.animationDuration' },
+          { label: 'Discovery Hint Hold Duration', id: 'swipe.discoveryHintHoldMs' },
         ])}
       />
 

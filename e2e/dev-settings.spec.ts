@@ -103,6 +103,39 @@ test('a custom autoCloseDelay from dev settings closes an open row on its own', 
   await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 0, 0\)/, { timeout: 2000 });
 });
 
+test('a custom discoveryHintHoldMs keeps the automatic discovery hint fully open for that long before it closes', async ({ page }) => {
+  await seedAuthSession(page);
+  await page.addInitScript(
+    ({ key, value }) => localStorage.setItem(key, value),
+    { key: SWIPE_SETTINGS_KEY, value: JSON.stringify({ revealThreshold: 80, revealDuration: 180, autoCloseDelay: 0, animationDuration: 220, discoveryHintHoldMs: 2000 }) }
+  );
+  await mockListData(page, {
+    categories: [{ id: CAT_DAIRY, list_id: LIST_ID, user_id: USER_ID, name: 'מוצרי חלב' }],
+    items: [
+      { id: 'e2e-item-1', list_id: LIST_ID, user_id: USER_ID, category_id: CAT_DAIRY, name: 'חלב 3%', is_done: false, position: 0 },
+    ],
+  });
+
+  await page.goto('/');
+  // First row - the one and only row playEntryHint ever plays on.
+  const row = page.locator('[data-testid="item-row"]').first();
+
+  // ENTRY_HINT_DELAY_MS (500ms) + ENTRY_HINT_TRANSITION_MS (220ms) =
+  // fully revealed by ~720ms.
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 80, 0\)/, { timeout: 1500 });
+
+  // Still open ~1.7s after mount - well past when the *default* 500ms
+  // hold would already have closed it (720 + 500 + 220 = ~1440ms).
+  // This is the actual proof the configured 2000ms value took effect,
+  // not just a coincidence of the default timing.
+  await page.waitForTimeout(1000);
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 80, 0\)/);
+
+  // Closes only once the full ~2000ms hold (plus the return transition)
+  // has actually elapsed.
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 0, 0\)/, { timeout: 2000 });
+});
+
 const FEATURE_FLAGS_KEY = 'dev-settings:featureFlags';
 
 // Regression guard: InviteMemberModal briefly had an enableEmailInvite
