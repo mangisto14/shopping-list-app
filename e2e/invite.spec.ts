@@ -1,6 +1,6 @@
 // e2e/invite.spec.ts
 import { test, expect } from '@playwright/test';
-import { mockListData, mockInviteRpc, seedAuthSession, USER_ID } from './fixtures';
+import { mockListData, mockInviteRpc, mockCreateInviteLinkRpc, seedAuthSession, USER_ID } from './fixtures';
 
 test.describe('Invite Member', () => {
   test('the list owner can invite a member by email', async ({ page }) => {
@@ -10,6 +10,7 @@ test.describe('Invite Member', () => {
       profiles: [{ id: USER_ID, email: 'owner@example.com' }],
     });
     await mockInviteRpc(page);
+    await mockCreateInviteLinkRpc(page);
 
     await page.goto('/family');
     await expect(page.locator('p.font-semibold', { hasText: 'owner@example.com' })).toBeVisible();
@@ -31,6 +32,7 @@ test.describe('Invite Member', () => {
       profiles: [{ id: USER_ID, email: 'owner@example.com' }],
     });
     await mockInviteRpc(page, { errorCode: 'user_not_found' });
+    await mockCreateInviteLinkRpc(page);
 
     await page.goto('/family');
     // FamilyMembers.tsx's invite trigger lives inside FamilyHeroCard now,

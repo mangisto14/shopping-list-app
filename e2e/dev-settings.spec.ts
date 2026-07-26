@@ -9,7 +9,7 @@
 // e2e/dev-console-live.spec.ts covers the opposite build (flag on) and
 // actually drives the console's own UI.
 import { test, expect } from '@playwright/test';
-import { seedAuthSession, mockListData, LIST_ID, USER_ID } from './fixtures';
+import { seedAuthSession, mockListData, mockCreateInviteLinkRpc, LIST_ID, USER_ID } from './fixtures';
 
 const CAT_DAIRY = 'e2e-cat-dairy';
 const SWIPE_SETTINGS_KEY = 'dev-settings:swipe';
@@ -119,6 +119,7 @@ test('Email Invite always renders alongside Share Link, even with a stale featur
     { key: FEATURE_FLAGS_KEY, value: JSON.stringify({ enableEmailInvite: false }) }
   );
   await mockListData(page, { categories: [], items: [] });
+  await mockCreateInviteLinkRpc(page);
 
   await page.goto('/');
   await page.getByRole('button', { name: 'הזמן חבר' }).click();
