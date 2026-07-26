@@ -10,12 +10,15 @@ import {
   mockAuthEndpoints,
   mockCreateInviteLinkRpc,
   mockJoinListByTokenRpc,
+  mockRevokeInviteLinkRpc,
   seedAuthSession,
   USER_ID,
   OTHER_USER_ID,
   LIST_ID,
   MOCK_INVITE_TOKEN,
 } from './fixtures';
+
+const REPLACEMENT_TOKEN = 'b2c3d4e5f6a1091827364554637281900aabbccddeeff11';
 
 test.describe('Share Link - owner side', () => {
   test('the owner sees a real, per-list link, not a fixed mock code', async ({ page }) => {
@@ -65,6 +68,48 @@ test.describe('Share Link - owner side', () => {
     await page.goto('/family');
     await expect(page.getByText('רק בעל/ת הרשימה יכול/ה להזמין חברים')).toBeVisible();
     await expect(page.locator('p[dir="ltr"].font-mono')).toHaveCount(0);
+  });
+
+  test('revoking asks for confirmation, then generates a new link', async ({ page }) => {
+    await seedAuthSession(page, USER_ID, 'owner@example.com');
+    await mockListData(page, {
+      listMembers: [{ id: 'lm1', list_id: LIST_ID, user_id: USER_ID, role: 'owner', joined_at: new Date().toISOString() }],
+      profiles: [{ id: USER_ID, email: 'owner@example.com' }],
+    });
+
+    // First create_invite_link call (on mount) returns the original
+    // token; the one after revoke returns a different token - proves
+    // the UI actually shows the replacement, not a stale cached value.
+    let createCalls = 0;
+    await page.route('**/rest/v1/rpc/create_invite_link', (route) => {
+      createCalls += 1;
+      const token = createCalls === 1 ? MOCK_INVITE_TOKEN : REPLACEMENT_TOKEN;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ token, expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() }]),
+      });
+    });
+    await mockRevokeInviteLinkRpc(page);
+
+    let confirmMessage = '';
+    page.on('dialog', (dialog) => {
+      confirmMessage = dialog.message();
+      dialog.accept();
+    });
+
+    await page.goto('/family');
+    const linkText = page.locator('p[dir="ltr"].font-mono').first();
+    await expect(linkText).toContainText(`/invite/${MOCK_INVITE_TOKEN}`);
+
+    await page.getByRole('button', { name: 'ביטול הקישור' }).click();
+
+    // A native confirm() was actually shown (not skipped), and only
+    // after accepting it did revoke_invite_link get called.
+    await expect.poll(() => confirmMessage).not.toBe('');
+    await expect(linkText).toContainText(`/invite/${REPLACEMENT_TOKEN}`);
+    await expect(linkText).not.toContainText(MOCK_INVITE_TOKEN);
+    expect(createCalls).toBe(2);
   });
 });
 

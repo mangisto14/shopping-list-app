@@ -191,6 +191,20 @@ export async function mockJoinListByTokenRpc(
   });
 }
 
+// Mocks revoke_invite_link. Pass `errorCode` to simulate not_owner.
+export async function mockRevokeInviteLinkRpc(page: Page, { errorCode }: { errorCode?: string } = {}) {
+  await page.route('**/rest/v1/rpc/revoke_invite_link', (route) => {
+    if (errorCode) {
+      return route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: errorCode, code: 'P0001' }),
+      });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '' });
+  });
+}
+
 // Mocks GoTrue auth endpoints. Each flow (register/login/logout) only
 // needs its own endpoint mocked; the others are harmless no-ops if hit.
 export async function mockAuthEndpoints(
