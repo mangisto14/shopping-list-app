@@ -23,11 +23,31 @@ type State =
   | { status: 'not-owner' }
   | { status: 'error' };
 
+// Shared by the mount effect and handleRevoke's "generate a replacement"
+// step - both just need "call create_invite_link, turn the result into
+// a State". Not a hook itself (no state of its own), so it's fine to
+// call from a plain event handler too, not just an effect.
+async function fetchOrCreateLink(listId: string, setState: (s: State) => void) {
+  const { data, error } = await supabase.rpc('create_invite_link', { p_list_id: listId });
+  if (error) {
+    setState(error.message === 'not_owner' ? { status: 'not-owner' } : { status: 'error' });
+    return;
+  }
+  // supabase-js returns a `returns table(...)` RPC as an array of rows.
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.token) {
+    setState({ status: 'error' });
+    return;
+  }
+  setState({ status: 'ready', url: `${getInviteBaseUrl()}/invite/${row.token}` });
+}
+
 export default function InviteLinkCard() {
   const { activeListId } = useActiveList();
   const [state, setState] = useState<State>({ status: 'loading' });
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
+  const [revoking, setRevoking] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,27 +57,33 @@ export default function InviteLinkCard() {
     }
 
     setState({ status: 'loading' });
-    supabase
-      .rpc('create_invite_link', { p_list_id: activeListId })
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          setState(error.message === 'not_owner' ? { status: 'not-owner' } : { status: 'error' });
-          return;
-        }
-        // supabase-js returns a `returns table(...)` RPC as an array of rows.
-        const row = Array.isArray(data) ? data[0] : data;
-        if (!row?.token) {
-          setState({ status: 'error' });
-          return;
-        }
-        setState({ status: 'ready', url: `${getInviteBaseUrl()}/invite/${row.token}` });
-      });
+    fetchOrCreateLink(activeListId, (s) => {
+      if (!cancelled) setState(s);
+    });
 
     return () => {
       cancelled = true;
     };
   }, [activeListId]);
+
+  const handleRevoke = async () => {
+    if (state.status !== 'ready' || !activeListId || revoking) return;
+    if (!window.confirm('לבטל את קישור ההזמנה הנוכחי וליצור קישור חדש?')) return;
+
+    setRevoking(true);
+    const { error } = await supabase.rpc('revoke_invite_link', { p_list_id: activeListId });
+    if (error) {
+      setState({ status: 'error' });
+      setRevoking(false);
+      return;
+    }
+
+    // Immediately generate the replacement link - create_invite_link
+    // finds no active link right after a revoke, so this always mints
+    // a fresh token rather than leaving the owner with no link shown.
+    await fetchOrCreateLink(activeListId, setState);
+    setRevoking(false);
+  };
 
   const handleCopy = async () => {
     if (state.status !== 'ready') return;
@@ -148,7 +174,16 @@ export default function InviteLinkCard() {
           </button>
         )}
       </div>
-      <p className="text-xs font-medium text-gray-400">כל מי שמצטרף עם הקישור יצטרף לרשימה הזו</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-gray-400">כל מי שמצטרף עם הקישור יצטרף לרשימה הזו</p>
+        <button
+          onClick={handleRevoke}
+          disabled={revoking}
+          className="flex-shrink-0 text-xs font-bold text-red-500 hover:text-red-600 disabled:opacity-50 transition-colors"
+        >
+          {revoking ? 'מבטל...' : 'ביטול הקישור'}
+        </button>
+      </div>
     </div>
   );
 }
