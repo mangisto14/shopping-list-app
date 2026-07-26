@@ -48,6 +48,10 @@ export default function InviteLinkCard() {
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  // Deliberately separate from `state`: a failed revoke must NOT
+  // replace the still-valid link currently in `state` - see
+  // performRevoke below. Only ever shown alongside the 'ready' state.
+  const [revokeError, setRevokeError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,27 +70,47 @@ export default function InviteLinkCard() {
     };
   }, [activeListId]);
 
-  const handleRevoke = async () => {
-    if (state.status !== 'ready' || !activeListId || revoking) return;
-    if (!window.confirm('לבטל את קישור ההזמנה הנוכחי וליצור קישור חדש?')) return;
-
+  // Core revoke-then-replace logic, with no confirmation step of its
+  // own - handleRevoke (the button) confirms first; handleRetryRevoke
+  // (the inline retry after a failure) doesn't ask again, since the
+  // user already confirmed once to get here.
+  const performRevoke = async () => {
+    if (!activeListId) return;
+    setRevokeError(false);
     setRevoking(true);
+
     const { error } = await supabase.rpc('revoke_invite_link', { p_list_id: activeListId });
     if (error) {
-      setState({ status: 'error' });
+      // Preserve the current (still valid - this call never reached
+      // the point of revoking it) link in `state` untouched. Only
+      // surface an inline, retryable error alongside it.
+      setRevokeError(true);
       setRevoking(false);
       return;
     }
 
-    // Immediately generate the replacement link - create_invite_link
+    // Revoke succeeded - the old link is dead now. Switch to loading
+    // immediately so it's not shown (or copyable/shareable) a moment
+    // longer than it takes to fetch its replacement. create_invite_link
     // finds no active link right after a revoke, so this always mints
-    // a fresh token rather than leaving the owner with no link shown.
+    // a fresh token.
+    setState({ status: 'loading' });
     await fetchOrCreateLink(activeListId, setState);
     setRevoking(false);
   };
 
+  const handleRevoke = () => {
+    if (state.status !== 'ready' || revoking) return;
+    if (!window.confirm('לבטל את קישור ההזמנה הנוכחי וליצור קישור חדש?')) return;
+    performRevoke();
+  };
+
+  const handleRetryRevoke = () => {
+    performRevoke();
+  };
+
   const handleCopy = async () => {
-    if (state.status !== 'ready') return;
+    if (state.status !== 'ready' || revoking) return;
     try {
       await navigator.clipboard.writeText(state.url);
       setCopied(true);
@@ -98,7 +122,7 @@ export default function InviteLinkCard() {
   };
 
   const handleShare = async () => {
-    if (state.status !== 'ready') return;
+    if (state.status !== 'ready' || revoking) return;
     if (!navigator.share) {
       handleCopy();
       return;
@@ -152,7 +176,8 @@ export default function InviteLinkCard() {
         </p>
         <button
           onClick={handleCopy}
-          className={`flex-shrink-0 rounded-xl px-4 h-[42px] text-sm font-bold transition-all active:scale-95 ${
+          disabled={revoking}
+          className={`flex-shrink-0 rounded-xl px-4 h-[42px] text-sm font-bold transition-all active:scale-95 disabled:opacity-50 ${
             copied ? 'bg-green-500 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
           }`}
         >
@@ -165,8 +190,9 @@ export default function InviteLinkCard() {
         {typeof navigator !== 'undefined' && !!navigator.share && (
           <button
             onClick={handleShare}
+            disabled={revoking}
             aria-label="שיתוף קישור"
-            className={`flex-shrink-0 rounded-xl w-[42px] h-[42px] flex items-center justify-center text-base transition-all active:scale-95 ${
+            className={`flex-shrink-0 rounded-xl w-[42px] h-[42px] flex items-center justify-center text-base transition-all active:scale-95 disabled:opacity-50 ${
               shared ? 'bg-green-500 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
             }`}
           >
@@ -174,6 +200,18 @@ export default function InviteLinkCard() {
           </button>
         )}
       </div>
+      {revokeError && (
+        <div className="flex items-center justify-between gap-2 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+          <p className="text-xs font-medium text-red-600">ביטול הקישור נכשל.</p>
+          <button
+            onClick={handleRetryRevoke}
+            disabled={revoking}
+            className="flex-shrink-0 text-xs font-bold text-red-600 hover:text-red-700 disabled:opacity-50 transition-colors"
+          >
+            נסה/י שוב
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium text-gray-400">כל מי שמצטרף עם הקישור יצטרף לרשימה הזו</p>
         <button

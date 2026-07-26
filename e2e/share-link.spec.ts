@@ -111,6 +111,92 @@ test.describe('Share Link - owner side', () => {
     await expect(linkText).not.toContainText(MOCK_INVITE_TOKEN);
     expect(createCalls).toBe(2);
   });
+
+  test('cancelling the confirmation leaves the link untouched and never calls revoke', async ({ page }) => {
+    await seedAuthSession(page, USER_ID, 'owner@example.com');
+    await mockListData(page, {
+      listMembers: [{ id: 'lm1', list_id: LIST_ID, user_id: USER_ID, role: 'owner', joined_at: new Date().toISOString() }],
+      profiles: [{ id: USER_ID, email: 'owner@example.com' }],
+    });
+    await mockCreateInviteLinkRpc(page);
+
+    let revokeCalls = 0;
+    await page.route('**/rest/v1/rpc/revoke_invite_link', (route) => {
+      revokeCalls += 1;
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '' });
+    });
+
+    let confirmMessage = '';
+    page.on('dialog', (dialog) => {
+      confirmMessage = dialog.message();
+      dialog.dismiss();
+    });
+
+    await page.goto('/family');
+    const linkText = page.locator('p[dir="ltr"].font-mono').first();
+    await expect(linkText).toContainText(`/invite/${MOCK_INVITE_TOKEN}`);
+
+    await page.getByRole('button', { name: 'ביטול הקישור' }).click();
+
+    // The dialog was genuinely shown and genuinely declined.
+    await expect.poll(() => confirmMessage).not.toBe('');
+
+    // Give any (incorrect) follow-up request a moment to have fired,
+    // then assert it never did and nothing changed on screen.
+    await page.waitForTimeout(300);
+    expect(revokeCalls).toBe(0);
+    await expect(linkText).toContainText(`/invite/${MOCK_INVITE_TOKEN}`);
+    await expect(page.getByRole('button', { name: 'ביטול הקישור' })).toBeEnabled();
+  });
+
+  test('while the replacement link is loading, the old one is hidden and Copy/Share are disabled', async ({ page }) => {
+    await seedAuthSession(page, USER_ID, 'owner@example.com');
+    await mockListData(page, {
+      listMembers: [{ id: 'lm1', list_id: LIST_ID, user_id: USER_ID, role: 'owner', joined_at: new Date().toISOString() }],
+      profiles: [{ id: USER_ID, email: 'owner@example.com' }],
+    });
+    await mockRevokeInviteLinkRpc(page);
+
+    // First create_invite_link call (mount) resolves immediately. The
+    // second (post-revoke) is deliberately delayed, to widen the
+    // in-between window wide enough to actually assert against - real
+    // network latency would otherwise make this window too narrow to
+    // reliably test.
+    let createCalls = 0;
+    const RESPONSE_DELAY_MS = 1000;
+    await page.route('**/rest/v1/rpc/create_invite_link', async (route) => {
+      createCalls += 1;
+      const isReplacement = createCalls > 1;
+      if (isReplacement) await new Promise((resolve) => setTimeout(resolve, RESPONSE_DELAY_MS));
+      const token = isReplacement ? REPLACEMENT_TOKEN : MOCK_INVITE_TOKEN;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ token, expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() }]),
+      });
+    });
+
+    page.on('dialog', (dialog) => dialog.accept());
+
+    await page.goto('/family');
+    const linkText = page.locator('p[dir="ltr"].font-mono').first();
+    await expect(linkText).toContainText(`/invite/${MOCK_INVITE_TOKEN}`);
+
+    await page.getByRole('button', { name: 'ביטול הקישור' }).click();
+
+    // Mid-flight: the revoke already resolved (fast/unmocked-delay) but
+    // the replacement token hasn't arrived yet (RESPONSE_DELAY_MS).
+    // The old, now-revoked link must not still be presented as usable.
+    await expect(page.getByText('טוען קישור הזמנה')).toBeVisible();
+    await expect(page.locator('p[dir="ltr"].font-mono')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'העתקה' })).toHaveCount(0);
+
+    // Once the delayed response arrives, the new link replaces it and
+    // Copy/Share become usable again.
+    await expect(linkText).toContainText(`/invite/${REPLACEMENT_TOKEN}`, { timeout: RESPONSE_DELAY_MS + 5000 });
+    await expect(page.getByRole('button', { name: 'העתקה' })).toBeEnabled();
+    expect(createCalls).toBe(2);
+  });
 });
 
 test.describe('Share Link - accepting (logged in)', () => {
