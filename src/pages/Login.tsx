@@ -18,6 +18,15 @@ export default function Login() {
     e.preventDefault();
     setErrorMsg('');
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // Deliberately just navigate('/') here, not a stored post-login
+    // redirect target - AppShell itself owns consuming that (see
+    // postLoginRedirect.ts / App.jsx), once the authenticated route
+    // tree has actually mounted. Doing it here too would race against
+    // that route-tree swap: if this component's own navigate() call
+    // resolves first while the router's location still briefly points
+    // at /login (which has no match in the authenticated tree), the
+    // authenticated tree's own catch-all fires `<Navigate to="/">`
+    // and silently wins, discarding this navigate() entirely.
     if (!error) navigate('/');
     else setErrorMsg(friendlyErrorMessage(error.message, language as 'he' | 'en', 'login'));
   };
