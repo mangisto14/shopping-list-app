@@ -19,6 +19,10 @@ export default function Register() {
     e.preventDefault();
     setErrorMsg('');
     const { error } = await supabase.auth.signUp({ email, password });
+    // See the matching comment in Login.tsx - the stored post-login
+    // redirect (if any) is consumed centrally in AppShell once the
+    // authenticated route tree mounts, not here, to avoid racing that
+    // route-tree swap.
     if (!error) navigate('/');
     else setErrorMsg(friendlyErrorMessage(error.message, language as 'he' | 'en', 'register'));
   };

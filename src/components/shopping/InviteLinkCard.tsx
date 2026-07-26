@@ -1,10 +1,8 @@
 // src/components/shopping/InviteLinkCard.tsx
-import { useState } from 'react';
-
-export interface InviteLink {
-  code: string;
-  url: string;
-}
+import { useEffect, useState } from 'react';
+import { supabase } from '../../supabase/client';
+import { useActiveList } from '../../ActiveListContext';
+import { friendlyErrorMessage } from '../../utils/friendlyError';
 
 // Priority: VITE_APP_URL, if set, wins - configure this in production/
 // preview deployments so invite links point at the canonical domain
@@ -12,29 +10,109 @@ export interface InviteLink {
 // serve the page. Falls back to window.location.origin so this works
 // correctly with zero configuration in every other environment (local
 // dev, a Vercel preview URL, etc.) - e.g.
-// https://shopping-list.vercel.app/invite/ABC123.
+// https://shopping-list.vercel.app/invite/<token>.
 function getInviteBaseUrl(): string {
   const configured = import.meta.env.VITE_APP_URL;
   if (configured) return String(configured).replace(/\/+$/, '');
   return window.location.origin;
 }
 
-// TODO (Future): generate a real, secure, per-list invite token
-// server-side (e.g. a signed token, or a row in a dedicated
-// invite_links table with an expiry) instead of this fixed mock code.
-const MOCK_INVITE_CODE = 'ABC123';
+type State =
+  | { status: 'loading' }
+  | { status: 'ready'; url: string }
+  | { status: 'not-owner' }
+  | { status: 'error' };
 
-const MOCK_INVITE_LINK: InviteLink = {
-  code: MOCK_INVITE_CODE,
-  url: `${getInviteBaseUrl()}/invite/${MOCK_INVITE_CODE}`,
-};
+// Shared by the mount effect and handleRevoke's "generate a replacement"
+// step - both just need "call create_invite_link, turn the result into
+// a State". Not a hook itself (no state of its own), so it's fine to
+// call from a plain event handler too, not just an effect.
+async function fetchOrCreateLink(listId: string, setState: (s: State) => void) {
+  const { data, error } = await supabase.rpc('create_invite_link', { p_list_id: listId });
+  if (error) {
+    setState(error.message === 'not_owner' ? { status: 'not-owner' } : { status: 'error' });
+    return;
+  }
+  // supabase-js returns a `returns table(...)` RPC as an array of rows.
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.token) {
+    setState({ status: 'error' });
+    return;
+  }
+  setState({ status: 'ready', url: `${getInviteBaseUrl()}/invite/${row.token}` });
+}
 
 export default function InviteLinkCard() {
+  const { activeListId } = useActiveList();
+  const [state, setState] = useState<State>({ status: 'loading' });
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  // Deliberately separate from `state`: a failed revoke must NOT
+  // replace the still-valid link currently in `state` - see
+  // performRevoke below. Only ever shown alongside the 'ready' state.
+  const [revokeError, setRevokeError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeListId) {
+      setState({ status: 'error' });
+      return;
+    }
+
+    setState({ status: 'loading' });
+    fetchOrCreateLink(activeListId, (s) => {
+      if (!cancelled) setState(s);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeListId]);
+
+  // Core revoke-then-replace logic, with no confirmation step of its
+  // own - handleRevoke (the button) confirms first; handleRetryRevoke
+  // (the inline retry after a failure) doesn't ask again, since the
+  // user already confirmed once to get here.
+  const performRevoke = async () => {
+    if (!activeListId) return;
+    setRevokeError(false);
+    setRevoking(true);
+
+    const { error } = await supabase.rpc('revoke_invite_link', { p_list_id: activeListId });
+    if (error) {
+      // Preserve the current (still valid - this call never reached
+      // the point of revoking it) link in `state` untouched. Only
+      // surface an inline, retryable error alongside it.
+      setRevokeError(true);
+      setRevoking(false);
+      return;
+    }
+
+    // Revoke succeeded - the old link is dead now. Switch to loading
+    // immediately so it's not shown (or copyable/shareable) a moment
+    // longer than it takes to fetch its replacement. create_invite_link
+    // finds no active link right after a revoke, so this always mints
+    // a fresh token.
+    setState({ status: 'loading' });
+    await fetchOrCreateLink(activeListId, setState);
+    setRevoking(false);
+  };
+
+  const handleRevoke = () => {
+    if (state.status !== 'ready' || revoking) return;
+    if (!window.confirm('לבטל את קישור ההזמנה הנוכחי וליצור קישור חדש?')) return;
+    performRevoke();
+  };
+
+  const handleRetryRevoke = () => {
+    performRevoke();
+  };
 
   const handleCopy = async () => {
+    if (state.status !== 'ready' || revoking) return;
     try {
-      await navigator.clipboard.writeText(MOCK_INVITE_LINK.url);
+      await navigator.clipboard.writeText(state.url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -42,6 +120,46 @@ export default function InviteLinkCard() {
       // - fail silently rather than show a false success state.
     }
   };
+
+  const handleShare = async () => {
+    if (state.status !== 'ready' || revoking) return;
+    if (!navigator.share) {
+      handleCopy();
+      return;
+    }
+    try {
+      await navigator.share({ url: state.url, title: 'הזמנה למשפחה' });
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
+    } catch {
+      // User cancelled the share sheet, or the API/permission isn't
+      // available in this context - not an error worth surfacing.
+    }
+  };
+
+  if (state.status === 'loading') {
+    return (
+      <div className="bg-white rounded-[18px] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_20px_rgba(15,23,42,0.05)] p-4">
+        <p className="text-sm font-medium text-gray-400">טוען קישור הזמנה...</p>
+      </div>
+    );
+  }
+
+  if (state.status === 'not-owner') {
+    return (
+      <div className="bg-white rounded-[18px] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_20px_rgba(15,23,42,0.05)] p-4">
+        <p className="text-sm font-medium text-gray-500">{friendlyErrorMessage('not_owner', 'he', 'invite')}</p>
+      </div>
+    );
+  }
+
+  if (state.status === 'error') {
+    return (
+      <div className="bg-white rounded-[18px] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_20px_rgba(15,23,42,0.05)] p-4">
+        <p className="text-sm font-medium text-gray-500">{friendlyErrorMessage(null, 'he', 'invite')}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-[18px] shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_20px_rgba(15,23,42,0.05)] p-4 flex flex-col gap-2.5">
@@ -54,18 +172,56 @@ export default function InviteLinkCard() {
           dir="ltr"
           className="flex-1 min-w-0 truncate text-[13px] text-gray-500 bg-slate-50 border border-gray-100 rounded-xl px-3 py-2.5 font-mono"
         >
-          {MOCK_INVITE_LINK.url}
+          {state.url}
         </p>
         <button
           onClick={handleCopy}
-          className={`flex-shrink-0 rounded-xl px-4 h-[42px] text-sm font-bold transition-all active:scale-95 ${
+          disabled={revoking}
+          className={`flex-shrink-0 rounded-xl px-4 h-[42px] text-sm font-bold transition-all active:scale-95 disabled:opacity-50 ${
             copied ? 'bg-green-500 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
           }`}
         >
           {copied ? '✓ הועתק' : 'העתקה'}
         </button>
+        {/* Only rendered when the Web Share API actually exists (mobile
+            browsers, mostly) - on desktop this button would either not
+            appear or silently fall back to copy, so skip the ambiguity
+            and just not render it there at all. */}
+        {typeof navigator !== 'undefined' && !!navigator.share && (
+          <button
+            onClick={handleShare}
+            disabled={revoking}
+            aria-label="שיתוף קישור"
+            className={`flex-shrink-0 rounded-xl w-[42px] h-[42px] flex items-center justify-center text-base transition-all active:scale-95 disabled:opacity-50 ${
+              shared ? 'bg-green-500 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+            }`}
+          >
+            {shared ? '✓' : '↗️'}
+          </button>
+        )}
       </div>
-      <p className="text-xs font-medium text-gray-400">כל מי שמצטרף עם הקישור רואה את כל הרשימות</p>
+      {revokeError && (
+        <div className="flex items-center justify-between gap-2 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+          <p className="text-xs font-medium text-red-600">ביטול הקישור נכשל.</p>
+          <button
+            onClick={handleRetryRevoke}
+            disabled={revoking}
+            className="flex-shrink-0 text-xs font-bold text-red-600 hover:text-red-700 disabled:opacity-50 transition-colors"
+          >
+            נסה/י שוב
+          </button>
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-gray-400">כל מי שמצטרף עם הקישור יצטרף לרשימה הזו</p>
+        <button
+          onClick={handleRevoke}
+          disabled={revoking}
+          className="flex-shrink-0 text-xs font-bold text-red-500 hover:text-red-600 disabled:opacity-50 transition-colors"
+        >
+          {revoking ? 'מבטל...' : 'ביטול הקישור'}
+        </button>
+      </div>
     </div>
   );
 }

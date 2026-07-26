@@ -148,6 +148,63 @@ export async function mockInviteRpc(page: Page, { errorCode }: { errorCode?: str
   });
 }
 
+// A realistic-looking (but fake) 48-char hex token, matching what
+// encode(gen_random_bytes(24), 'hex') actually produces server-side.
+export const MOCK_INVITE_TOKEN = 'a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778';
+
+// Mocks create_invite_link. Pass `errorCode` to simulate not_owner.
+export async function mockCreateInviteLinkRpc(
+  page: Page,
+  { token = MOCK_INVITE_TOKEN, errorCode }: { token?: string; errorCode?: string } = {}
+) {
+  await page.route('**/rest/v1/rpc/create_invite_link', (route) => {
+    if (errorCode) {
+      return route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: errorCode, code: 'P0001' }),
+      });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{ token, expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() }]),
+    });
+  });
+}
+
+// Mocks join_list_by_token. Pass `errorCode` to simulate one of
+// invalid_link/revoked_link/expired_link/already_member.
+export async function mockJoinListByTokenRpc(
+  page: Page,
+  { listId = LIST_ID, errorCode }: { listId?: string; errorCode?: string } = {}
+) {
+  await page.route('**/rest/v1/rpc/join_list_by_token', (route) => {
+    if (errorCode) {
+      return route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: errorCode, code: 'P0001' }),
+      });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(listId) });
+  });
+}
+
+// Mocks revoke_invite_link. Pass `errorCode` to simulate not_owner.
+export async function mockRevokeInviteLinkRpc(page: Page, { errorCode }: { errorCode?: string } = {}) {
+  await page.route('**/rest/v1/rpc/revoke_invite_link', (route) => {
+    if (errorCode) {
+      return route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: errorCode, code: 'P0001' }),
+      });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '' });
+  });
+}
+
 // Mocks GoTrue auth endpoints. Each flow (register/login/logout) only
 // needs its own endpoint mocked; the others are harmless no-ops if hit.
 export async function mockAuthEndpoints(

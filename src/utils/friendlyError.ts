@@ -4,7 +4,7 @@
 // credentials", "AuthRetryableFetchError: Failed to fetch", raw
 // Postgres constraint text) directly to users.
 
-export type ErrorContext = 'login' | 'register' | 'network' | 'permission' | 'invite' | 'generic';
+export type ErrorContext = 'login' | 'register' | 'network' | 'permission' | 'invite' | 'inviteAccept' | 'generic';
 
 interface FriendlyErrorMessages {
   he: string;
@@ -56,6 +56,22 @@ const MESSAGES: Record<string, FriendlyErrorMessages> = {
     he: 'רק בעל/ת הרשימה יכול/ה להזמין חברים.',
     en: 'Only the list owner can invite members.',
   },
+  alreadyMemberSelf: {
+    he: 'את/ה כבר חבר/ה ברשימה הזו.',
+    en: "You're already a member of this list.",
+  },
+  invalidLink: {
+    he: 'קישור ההזמנה לא תקין.',
+    en: 'This invite link is invalid.',
+  },
+  revokedLink: {
+    he: 'קישור ההזמנה הזה כבר לא פעיל.',
+    en: 'This invite link has been revoked.',
+  },
+  expiredLink: {
+    he: 'קישור ההזמנה הזה פג תוקף.',
+    en: 'This invite link has expired.',
+  },
   inviteFailed: {
     he: 'ההזמנה נכשלה. נסה/י שוב.',
     en: 'Invite failed. Please try again.',
@@ -72,6 +88,7 @@ const FALLBACK_BY_CONTEXT: Record<ErrorContext, keyof typeof MESSAGES> = {
   network: 'network',
   permission: 'permission',
   invite: 'inviteFailed',
+  inviteAccept: 'generic',
   generic: 'generic',
 };
 
@@ -88,9 +105,14 @@ export function friendlyErrorMessage(
 
   let key: keyof typeof MESSAGES | null = null;
   if (text.includes('invalid login credentials')) key = 'invalidCredentials';
-  else if (text === 'already_member' || text.includes('already a member')) key = 'alreadyMember';
+  else if (text === 'already_member' || text.includes('already a member')) {
+    key = context === 'inviteAccept' ? 'alreadyMemberSelf' : 'alreadyMember';
+  }
   else if (text === 'user_not_found') key = 'userNotFound';
   else if (text === 'not_owner') key = 'notOwner';
+  else if (text === 'invalid_link') key = 'invalidLink';
+  else if (text === 'revoked_link') key = 'revokedLink';
+  else if (text === 'expired_link') key = 'expiredLink';
   else if (text.includes('already registered') || text.includes('already exists')) key = 'userAlreadyRegistered';
   else if (text.includes('email not confirmed') || text.includes('email not verified')) key = 'emailNotConfirmed';
   else if (text.includes('password') && (text.includes('at least') || text.includes('should be'))) key = 'weakPassword';
