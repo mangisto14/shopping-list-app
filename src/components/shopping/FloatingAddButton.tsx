@@ -25,11 +25,11 @@ export default function FloatingAddButton({ onClick }: FloatingAddButtonProps) {
       // ~12px of the button poking up above the bar - reads as part of
       // the nav bar rather than a separate floating overlay.
       style={{ bottom: 'calc(env(safe-area-inset-bottom) + 18px)' }}
-      className="fixed left-1/2 -translate-x-1/2 z-50 w-[58px] h-[58px] rounded-full bg-gradient-to-br from-purple-500 to-purple-700 text-white shadow-[0_0_0_8px_rgba(147,51,234,0.12),0_10px_24px_rgba(147,51,234,0.4),0_2px_6px_rgba(147,51,234,0.3)] active:scale-95 transition-transform duration-150 flex items-center justify-center text-3xl font-light"
+      className="fixed left-1/2 -translate-x-1/2 z-50 w-[58px] h-[58px] rounded-full bg-blue-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.35)] active:scale-95 transition-transform duration-150 flex items-center justify-center text-3xl font-light"
     >
       {pulsing && (
         <span
-          className="absolute inset-0 rounded-full bg-purple-400 opacity-75 animate-ping"
+          className="absolute inset-0 rounded-full bg-blue-500 opacity-75 animate-ping"
           style={{ animationDuration: `${animations.fabAnimationDuration}ms`, animationIterationCount: 1 }}
           aria-hidden="true"
         />

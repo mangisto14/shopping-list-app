@@ -9,8 +9,8 @@ interface CategoryChipProps {
   activeClassName?: string;
   onClick: () => void;
   // 'default' (unset) = AddItemSheet's category picker, unchanged.
-  // 'filter' = ShoppingList's filter row: taller touch target + a
-  // stronger inactive-state shadow per that row's own design spec.
+  // 'filter' = ShoppingList's filter row: matches the grouped-inset
+  // list's flatter Apple treatment (no extra shadow), compact height.
   variant?: 'default' | 'filter';
 }
 
@@ -22,12 +22,10 @@ function CategoryChip({ icon, label, active = false, completed = false, activeCl
   return (
     <button
       onClick={onClick}
-      className={`flex-shrink-0 ${isFilter ? 'h-10' : 'h-[34px]'} rounded-full px-3.5 text-[13.5px] font-semibold transition-all duration-[120ms] border flex items-center gap-1 ${
+      className={`flex-shrink-0 ${isFilter ? 'h-8' : 'h-[34px]'} rounded-full px-3.5 text-[13.5px] font-semibold transition-all duration-[120ms] border flex items-center gap-1 ${
         active
           ? `${activeClassName ?? 'bg-blue-600'} text-white border-transparent shadow-[0_3px_8px_rgba(37,99,235,0.22)]`
-          : isFilter
-            ? 'bg-white text-gray-600 border-gray-200 shadow-[0_2px_6px_rgba(15,23,42,0.08)] hover:border-gray-300'
-            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
       }`}
     >
       <span>{icon}</span>

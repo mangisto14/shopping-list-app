@@ -63,14 +63,13 @@ function prefersReducedMotion() {
 
 // min-h-[52px] keeps every row in the 50-56px target band regardless of
 // content, rather than letting padding alone (which varies with font
-// rendering) land outside it. The border makes the row read as a
-// complete, self-contained card rather than just a flat colored block -
-// it's part of the card element itself, so it moves with the card and
-// stays visible for the entire swipe, never interrupted by the delete
-// layer underneath.
-const ROW_BASE = 'bg-white rounded-xl px-3 py-2 min-h-[52px] border border-gray-100';
-const ROW_SHADOW_REST = 'shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_10px_rgba(15,23,42,0.05)]';
-const ROW_SHADOW_DRAG = 'shadow-[0_3px_6px_rgba(15,23,42,0.08),0_10px_24px_rgba(15,23,42,0.12)]';
+// rendering) land outside it. Apple/grouped-inset-list treatment: rows
+// are flush (no radius/border/shadow of their own) - the rounded corners
+// and background belong to the group container they sit inside
+// (CategorySection), which also clips the true first/last row's corners
+// via its own overflow-hidden. `bg-white` still lives here so an
+// at-rest row fully covers the delete panel mounted underneath it.
+const ROW_BASE = 'bg-white px-3 py-2 min-h-[52px]';
 
 // Compact item row: category-color strip, checkbox, name, quantity. No
 // category badge, no "added by" attribution, no avatar - the design
@@ -288,8 +287,8 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
   // completed rows removes the possibility entirely.)
   if (item.is_done) {
     return (
-      <li className={`flex items-center gap-2.5 ${ROW_BASE} ${ROW_SHADOW_REST}`}>
-        <span className={`flex-shrink-0 w-1 self-stretch rounded-full ${style.strip} opacity-50`} aria-hidden="true" />
+      <li className={`flex items-center gap-2.5 ${ROW_BASE}`}>
+        <span className={`flex-shrink-0 w-2 h-2 rounded-full ${style.strip} opacity-50`} aria-hidden="true" />
         <button
           onClick={onToggle}
           aria-label="toggle item"
@@ -335,8 +334,8 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
   // than removing deletion entirely.
   if (!featureFlags.enableSwipeDelete) {
     return (
-      <li className={`flex items-center gap-2.5 ${ROW_BASE} ${ROW_SHADOW_REST}`}>
-        <span className={`flex-shrink-0 w-1 self-stretch rounded-full ${style.strip}`} aria-hidden="true" />
+      <li className={`flex items-center gap-2.5 ${ROW_BASE}`}>
+        <span className={`flex-shrink-0 w-2 h-2 rounded-full ${style.strip}`} aria-hidden="true" />
         <button
           onClick={onToggle}
           aria-label="toggle item"
@@ -378,7 +377,7 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
 
   return (
     <li
-      className={`relative rounded-xl transition-[opacity,max-height] ease-in-out ${isDeleting ? 'opacity-0' : 'opacity-100'}`}
+      className={`relative transition-[opacity,max-height] ease-in-out ${isDeleting ? 'opacity-0' : 'opacity-100'}`}
       style={{
         overflow: 'hidden',
         maxHeight: collapsed ? 0 : 96,
@@ -388,11 +387,13 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
       {/* Delete action, fixed at the left edge, revealed as the row
           above it slides right. Only ever mounted for active items -
           see the `item.is_done` branch above. This container's own
-          size/position never changes - only the icon inside is
-          repositioned to the left edge, via absolute placement within
-          it, so it stays put regardless of the card's drag. */}
+          size/position never changes regardless of the card's drag.
+          Flush/square, matching the grouped-inset row treatment - the
+          group container's own rounding + overflow-hidden clips the
+          true first/last row's corners, so nothing here needs its own
+          radius. */}
       <div
-        className={`absolute inset-y-0 left-0 rounded-xl transition-colors duration-150 ${
+        className={`absolute inset-y-0 left-0 flex items-center justify-center transition-colors duration-150 ${
           pastThreshold ? 'bg-red-600' : 'bg-red-500'
         }`}
         style={{ width: MAX_DRAG_PX }}
@@ -400,8 +401,8 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
         <button
           onClick={triggerDelete}
           aria-label="מחיקת פריט"
-          className="absolute left-3.5 top-1/2 flex flex-col items-center gap-0.5 text-white"
-          style={{ opacity: revealProgress, transform: `translateY(-50%) scale(${iconScale})` }}
+          className="flex flex-col items-center gap-0.5 text-white"
+          style={{ opacity: revealProgress, transform: `scale(${iconScale})` }}
         >
           <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
             <path
@@ -426,15 +427,9 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
           transition: dragging ? 'none' : `transform ${hinting ? ENTRY_HINT_TRANSITION_MS : swipeSettings.revealDuration}ms ease-out`,
           touchAction: 'pan-y',
         }}
-        className={`relative flex items-center gap-2.5 overflow-hidden ${ROW_BASE} ${dragging ? ROW_SHADOW_DRAG : ROW_SHADOW_REST}`}
+        className={`relative flex items-center gap-2.5 ${ROW_BASE}`}
       >
-        {/* Permanent swipe-to-delete affordance - not a category
-            indicator (that's the separate strip below). Always visible,
-            moves with the card, clipped to the card's own rounded
-            corners by this container's overflow-hidden. */}
-        <span className="absolute inset-y-0 left-0 w-[2px] bg-red-500" aria-hidden="true" />
-
-        <span className={`flex-shrink-0 w-1 self-stretch rounded-full ${style.strip}`} aria-hidden="true" />
+        <span className={`flex-shrink-0 w-2 h-2 rounded-full ${style.strip}`} aria-hidden="true" />
 
         <button
           onClick={() => guardTap(onToggle)}
