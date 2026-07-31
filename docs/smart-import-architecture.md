@@ -1,6 +1,6 @@
 # Smart Import — Architecture (v2, approved)
 
-Status: **Approved for Phase 1 implementation.** This supersedes the original chat proposal — six changes were requested during review and are incorporated below. Anything not explicitly called out as "Phase 1: real" is a stub (valid interface, registered, `isAvailable()` → `false` or `throws not implemented`) per the original "infrastructure only" scope.
+Status: **Phase 1 and Phase 2 implemented.** This supersedes the original chat proposal — six changes were requested during Phase 1 review and are incorporated below. Anything not explicitly called out as "Phase 1: real" is a stub (valid interface, registered, `isAvailable()` → `false` or `throws not implemented`) per the original "infrastructure only" scope. Phase 2 (see its own section below) adds a real AI Analysis stage between Validator and Preview.
 
 ## Changes from the original proposal
 
@@ -320,6 +320,52 @@ Lists.tsx
 | Vitest introduction adds new tooling/CI surface | **LOW** | Additive devDependency + one new script; existing Playwright/tsc/lint/build steps are untouched. |
 | Image/Camera/Gallery sources still have no Supabase Storage backing | **MEDIUM** | Unchanged from the original assessment - not a Phase 1 blocker since these remain stubs; flagged again here so it isn't lost. |
 
+## Phase 2 (implemented): AI Analysis stage
+
+Pipeline is now: `Source → Extractor → Rule-Based Normalizer → Validator → AI Analysis → Preview → Import`. Inserted after Validator, before the result is returned to the UI - no change to `Source`/`Extractor`/`Normalizer`/`Validator` interfaces, and no restructuring of Preview's existing editable fields (only additive display of AI-enriched data, per the approved scope).
+
+### `TextUnderstandingEngine` - the provider-agnostic AI interface
+
+```typescript
+export interface TextUnderstandingEngine {
+  id: string; // e.g. 'heuristic' - deliberately never a vendor name
+  isAvailable(): boolean | Promise<boolean>;
+  analyze(candidates: ImportItemCandidate[], context: ImportPipelineContext): Promise<AiAnalysisResult>;
+}
+```
+
+Same discipline as `Normalizer`: nothing in this interface, or in `ImportService`, or in the UI, references Claude, OpenAI, Gemini, Ollama, Azure OpenAI, or any other vendor. Phase 2's only implementation (`HeuristicTextUnderstandingEngine`) makes no network call at all - a future vendor-backed implementation is added purely by registering a second engine in `src/import/ai/registerAiEngines.ts`.
+
+### What `HeuristicTextUnderstandingEngine` genuinely does
+
+Real, deterministic, plain-string-algorithm heuristics - not a fabricated "AI":
+
+- **Name tidy-up** (high confidence): strips stray whitespace/punctuation. Meaning-preserving, so it's safe to auto-apply.
+- **Category suggestion** (medium confidence): word-token overlap with existing categories - a real improvement over the Rule-Based Normalizer's plain substring check (e.g. category "מוצרי חלב" now matches an item named "חלב 3%", which the substring check misses).
+- **Unit inference** (low confidence): a small keyword lookup (`commonUnits.ts`) for common grocery items missing a unit. Low confidence because it's a guess about the *product*, not derived from what the user actually typed - never auto-applied.
+- **Ambiguous-item flagging**: names with no real letters or too short to mean anything.
+- **Duplicate/near-duplicate detection**: within the same import batch only (the list's own existing-item duplicate check already lives in `DefaultValidator`), via edit distance. Always a suggestion (`aiDuplicateOfCandidateId` + a merge action in Preview) - **never an automatic merge**.
+
+### What it deliberately does not do
+
+Two of the nine responsibilities in the brief - **real spelling correction** and **generating a genuinely useful note** - require actual language understanding. A heuristic can't do either honestly without fabricating output that looks smarter than it is, so neither is implemented here. Both are left for a real AI-backed engine to implement against the exact same `TextUnderstandingEngine` interface; nothing about the interface, the confidence rule, or the Preview UI needs to change when that happens.
+
+### Confidence rule (as implemented in `applyAiEnrichments`)
+
+| Confidence | Behavior |
+|---|---|
+| High | Field is populated directly. Preview shows a quiet "✨" badge. |
+| Medium | Field is also populated directly, but Preview's badge is visually stronger (highlighted) - a nudge to double-check, not a demand. |
+| Low | The real field is **never** touched. The suggested value lives in a separate `aiPending*` field until the user taps "apply" in Preview - copying it in only then. |
+
+### Error handling
+
+An absent, unavailable, or throwing AI engine is a normal, fully-supported outcome, not an error: `ImportService.runImport` catches any failure from the AI Analysis stage and simply returns the Validator's own output untouched (`aiEngineId` stays `undefined`). The import flow is never blocked waiting on or failing because of AI. Verified directly with a test that mocks the engine registry to simulate both an unavailable engine and one that throws.
+
+### UX
+
+`ImportSheet` gets a dedicated "analyzing" step (spinner + "מנתח את רשימת הקניות שלך...") shown while `runImport` (now including the AI stage) is in flight, replacing what was previously just a disabled button label.
+
 ## Future enhancement (not part of Phase 1): optional AI Review stage
 
 **Not implemented. Not scheduled. This section exists only to confirm the Phase 1 architecture reserves room for it, so adding it later doesn't force a redesign.**
@@ -327,7 +373,7 @@ Lists.tsx
 A future phase may insert an optional review step between Preview and the actual commit:
 
 ```
-Source → Extractor → AI Normalizer → Validator → Preview → AI Review (Optional) → Import
+Source → Extractor → Rule-Based Normalizer → Validator → AI Analysis → Preview → AI Review (Optional) → Import
 ```
 
 Where today's flow goes straight from Preview's confirm action to `ImportService.commit()`, this stage would sit in between: it takes the user's already-edited candidate list (post-Preview, pre-commit) and looks at it *as a whole* rather than row-by-row, to support things like:
