@@ -15,6 +15,8 @@ export interface Item {
   is_done: boolean;
   position: number;
   category_id: string | null;
+  unit: string | null;
+  notes: string | null;
 }
 
 export function useItems() {
@@ -52,8 +54,18 @@ export function useItems() {
     onDelete: (id) => setItems((prev) => removeById(prev, id)),
   });
 
-  async function addItem(name: string, categoryId: string | null): Promise<boolean> {
+  // `options` is additive and optional so every pre-existing call site
+  // (ShoppingList.tsx's addItem/onIncrement, quantity-stepper loop)
+  // keeps compiling and behaving identically without passing it -
+  // only Smart Import's commit step actually populates unit/notes.
+  async function addItem(
+    name: string,
+    categoryId: string | null,
+    options?: { unit?: string | null; notes?: string | null }
+  ): Promise<boolean> {
     if (!name.trim() || !user || !activeListId) return false;
+    const unit = options?.unit ?? null;
+    const notes = options?.notes ?? null;
 
     const tempId = `temp-${crypto.randomUUID()}`;
     const optimisticItem: Item = {
@@ -64,6 +76,8 @@ export function useItems() {
       is_done: false,
       position: items.length,
       category_id: categoryId,
+      unit,
+      notes,
     };
     setItems((prev) => [...prev, optimisticItem]);
 
@@ -76,6 +90,8 @@ export function useItems() {
         is_done: false,
         position: items.length,
         category_id: categoryId,
+        unit,
+        notes,
       })
       .select()
       .single();

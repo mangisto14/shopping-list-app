@@ -8,6 +8,7 @@ import EmptyState from '../components/ui/EmptyState';
 import Skeleton from '../components/ui/Skeleton';
 import ListActionsSheet from '../components/lists/ListActionsSheet';
 import type { ShoppingListSummary } from '../hooks/useLists';
+import ImportEntryPoint from '../import/ui/ImportEntryPoint';
 
 // Same deterministic, positional fallback emoji used by ShoppingList.tsx's
 // list switcher - `lists` has no emoji column (persisting a custom icon
@@ -94,7 +95,10 @@ export default function Lists() {
 
   return (
     <div className="max-w-md mx-auto p-4">
-      <h2 className="text-xl font-bold mb-4 text-gray-800">{t.title}</h2>
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <h2 className="text-xl font-bold text-gray-800">{t.title}</h2>
+        <ImportEntryPoint />
+      </div>
 
       <div className="flex mb-4 gap-2">
         <label htmlFor="new-list-input" className="sr-only">
