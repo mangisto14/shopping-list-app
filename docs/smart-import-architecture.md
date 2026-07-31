@@ -319,3 +319,35 @@ Lists.tsx
 | Rule-based normalizer's quantity/unit parsing is naive (regex) and misparses real-world pasted text | **MEDIUM** | Acceptable for Phase 1 - Preview lets the user correct every field before commit, so a wrong guess is a minor edit, not a silent data error. |
 | Vitest introduction adds new tooling/CI surface | **LOW** | Additive devDependency + one new script; existing Playwright/tsc/lint/build steps are untouched. |
 | Image/Camera/Gallery sources still have no Supabase Storage backing | **MEDIUM** | Unchanged from the original assessment - not a Phase 1 blocker since these remain stubs; flagged again here so it isn't lost. |
+
+## Future enhancement (not part of Phase 1): optional AI Review stage
+
+**Not implemented. Not scheduled. This section exists only to confirm the Phase 1 architecture reserves room for it, so adding it later doesn't force a redesign.**
+
+A future phase may insert an optional review step between Preview and the actual commit:
+
+```
+Source → Extractor → AI Normalizer → Validator → Preview → AI Review (Optional) → Import
+```
+
+Where today's flow goes straight from Preview's confirm action to `ImportService.commit()`, this stage would sit in between: it takes the user's already-edited candidate list (post-Preview, pre-commit) and looks at it *as a whole* rather than row-by-row, to support things like:
+
+- Merging duplicate items
+- Detecting similar products
+- Normalizing quantities and units across rows
+- Correcting spelling mistakes
+- Suggesting better categories
+- Suggesting complementary shopping items
+- Highlighting ambiguous items for the user to confirm before they're actually added
+
+### Why this doesn't require major refactoring
+
+This capability is deliberately *not* the same thing as the AI Normalizer stage: Normalizer only ever sees one Extractor's output in isolation, before the user has edited anything; AI Review would see the whole, user-confirmed candidate list at once, which is a distinct concern - so it's designed as its own stage rather than folded into Normalizer's job. Concretely, adding it later means:
+
+- **A new pluggable interface, not a change to any existing one.** A `Reviewer` interface (`id` + one method, e.g. `review(candidates: ImportItemCandidate[], context): Promise<ReviewedImportResult>`) would be added to `types.ts` and registered via `src/import/reviewers/registerReviewers.ts` - the exact same shape and pattern already used for `Normalizer` and `Validator`. No existing interface (`ImportSource`, `Extractor`, `Normalizer`, `Validator`) needs to change.
+- **`ImportItemCandidate` doesn't need a new shape.** AI Review would operate on and return the same candidate shape Preview already edits and `commit()` already consumes - no new type needs to be threaded through the earlier stages.
+- **One additive method on `ImportService`**, e.g. `review(...)`, alongside the existing `runImport`/`commit` - not a change to either of their signatures.
+- **One additive step in `ImportSheet`'s local state machine.** Today's `Step` type (`'source' | 'preview'`) gains a `'review'` value; `handleConfirm` (currently: Preview confirm → `commit()` directly) would instead call the new `review()` step first when a reviewer is registered, and render its suggestions (reusing `ImportPreviewRow`'s existing editable-row UI, extended with a suggestion/diff indicator) before the same `commit()` call runs. This is a pure addition to the step machine, not a restructuring of it.
+- **"Optional" falls out of the existing registry pattern for free.** Every stage in this module is already looked up from a registry that can be empty (see how 7 of today's 8 sources are already effectively absent via `isAvailable() === false`, with zero special-casing elsewhere). An unregistered/empty `Reviewer` registry means this stage simply doesn't run, with no conditional logic needed anywhere else in the pipeline.
+
+No code changes were made for this section - it's a documentation-only confirmation that the extension point exists, per the instruction not to expand Phase 1's scope.
