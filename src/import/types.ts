@@ -1,6 +1,7 @@
 // src/import/types.ts
 // Shared contracts for the Smart Import pipeline:
-//   Source -> Extractor -> AI Normalizer -> Validator -> Preview
+//   Source -> Extractor -> Rule-Based Normalizer -> Validator ->
+//   AI Analysis -> Preview -> Import
 // See docs/smart-import-architecture.md for the full rationale. This
 // file has zero business logic - it exists so every stage can depend
 // on the same shapes without depending on each other's implementations.
@@ -118,10 +119,34 @@ export interface ValidationIssue {
   severity: 'warning' | 'error';
 }
 
+export type ConfidenceLevel = 'high' | 'medium' | 'low';
+
+export type AiEnrichableField = 'name' | 'quantity' | 'unit' | 'category' | 'notes';
+
+export interface AiSuggestionMeta {
+  confidence: ConfidenceLevel;
+  reason?: string;
+}
+
 // The shape ImportPreview actually renders and edits - a superset of
 // NormalizedItemCandidate: `categoryId`/`categoryName` are a resolved,
 // user-editable choice (not just a guess), and `included` is the
 // include/exclude toggle.
+//
+// The `ai*` fields below (Phase 2) are all optional/additive: a
+// candidate with none of them set behaves exactly as it did in Phase
+// 1 - existing consumers (ImportService.commit, which only reads
+// name/quantity/unit/categoryId/notes/included) are unaffected. They
+// exist purely so Preview can show which values came from AI Analysis
+// and at what confidence, per the confidence rule:
+//   high/medium  -> the real field above is already populated;
+//                   aiSuggestions[field] records that + the
+//                   confidence, so Preview can badge it
+//                   (medium additionally gets highlighted).
+//   low          -> the real field above is left as Validator
+//                   produced it; the suggested value instead lives in
+//                   the matching `aiPending*` field until the user
+//                   explicitly applies it - never silently written in.
 export interface ImportItemCandidate {
   id: string;
   rawText: string;
@@ -132,6 +157,60 @@ export interface ImportItemCandidate {
   categoryName: string | null;
   notes: string | null;
   included: boolean;
+  aiSuggestions?: Partial<Record<AiEnrichableField, AiSuggestionMeta>>;
+  aiPendingName?: string;
+  aiPendingQuantity?: number;
+  aiPendingUnit?: string;
+  aiPendingCategory?: { id: string | null; name: string | null };
+  aiPendingNotes?: string;
+  // Whole-row flag: AI Analysis found this item ambiguous enough that
+  // the user should look at it specifically (e.g. a name too short or
+  // generic to be confident about). Never auto-resolved - Preview
+  // just surfaces it; every field remains normally editable.
+  aiAmbiguous?: boolean;
+  // A suggested duplicate/merge target WITHIN THIS SAME import batch -
+  // always a suggestion, never applied automatically. Preview offers
+  // an explicit merge action; nothing merges without the user tapping it.
+  aiDuplicateOfCandidateId?: string | null;
+}
+
+// One field AI Analysis enriched for one candidate, with its
+// confidence and (for category) the resolved id/name pair.
+export interface AiEnrichedField {
+  value: string | number | { id: string | null; name: string | null };
+  confidence: ConfidenceLevel;
+  reason?: string;
+}
+
+export interface AiItemEnrichment {
+  candidateId: string;
+  name?: AiEnrichedField;
+  quantity?: AiEnrichedField;
+  unit?: AiEnrichedField;
+  category?: AiEnrichedField;
+  notes?: AiEnrichedField;
+  ambiguous?: boolean;
+  duplicateOfCandidateId?: string | null;
+}
+
+export interface AiAnalysisResult {
+  engineId: string;
+  enrichments: AiItemEnrichment[];
+  warnings: string[];
+}
+
+// The AI Analysis stage's contract. Provider-agnostic BY
+// CONSTRUCTION, same discipline as `Normalizer`: nothing here
+// references Claude, OpenAI, Gemini, Ollama, Azure OpenAI, or any
+// other vendor/model. Phase 2's only implementation
+// (HeuristicTextUnderstandingEngine) makes no network call at all - a
+// future vendor-backed implementation satisfies this exact same
+// interface and is swapped in via registration; the UI and
+// ImportService never reference a concrete engine.
+export interface TextUnderstandingEngine {
+  id: string; // e.g. 'heuristic' - deliberately never a vendor name
+  isAvailable(): boolean | Promise<boolean>;
+  analyze(candidates: ImportItemCandidate[], context: ImportPipelineContext): Promise<AiAnalysisResult>;
 }
 
 // What a Validator itself produces - just the candidates (in their
@@ -152,6 +231,12 @@ export interface ValidatedImportResult extends ValidationOutput {
   // tied to any one candidate row, unlike ValidationIssue - kept
   // separate rather than forcing a fake candidateId onto them.
   extractionWarnings: string[];
+  // Absent when no AI engine was available/registered, or it failed -
+  // the pipeline falls back to Validator's output untouched in either
+  // case (see ImportService.runImport), so this being unset is a
+  // normal, fully-supported state, not an error.
+  aiEngineId?: string;
+  aiWarnings?: string[];
 }
 
 export interface Validator {
