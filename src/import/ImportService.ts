@@ -1,9 +1,9 @@
 // src/import/ImportService.ts
 // The only piece of this module the UI is allowed to talk to (besides
-// types). Orchestrates Source -> Extractor -> AI Normalizer ->
-// Validator by looking providers up in their registries - it never
-// imports a concrete provider directly by name, and never branches on
-// which one is running.
+// types). Orchestrates Source -> Extractor -> Rule-Based Normalizer ->
+// Validator -> AI Analysis by looking providers up in their
+// registries - it never imports a concrete provider directly by name,
+// and never branches on which one is running.
 import type {
   AddItemFn,
   ImportPipelineContext,
@@ -17,6 +17,8 @@ import { IMPORT_SOURCE_METADATA } from './sources/metadata';
 import { ALL_EXTRACTORS } from './extractors/registerExtractors';
 import { ALL_NORMALIZERS, DEFAULT_NORMALIZER_ID } from './normalizers/registerNormalizers';
 import { ALL_VALIDATORS, DEFAULT_VALIDATOR_ID } from './validators/registerValidators';
+import { ALL_AI_ENGINES, DEFAULT_AI_ENGINE_ID } from './ai/registerAiEngines';
+import { applyAiEnrichments } from './ai/applyEnrichments';
 
 function getSource(id: ImportSourceId) {
   const source = ALL_SOURCES.find((s) => s.id === id);
@@ -43,6 +45,16 @@ function getDefaultValidator() {
   const validator = ALL_VALIDATORS.find((v) => v.id === DEFAULT_VALIDATOR_ID);
   if (!validator) throw new Error('No default validator registered');
   return validator;
+}
+
+// Unlike the other "getDefault*" lookups above, an AI engine being
+// absent or unavailable is a normal, fully-supported outcome (not an
+// error) - "the application must always remain functional without
+// AI". Returns null instead of throwing so runImport can fall back to
+// Validator's output untouched.
+function getAvailableAiEngine() {
+  const engine = ALL_AI_ENGINES.find((e) => e.id === DEFAULT_AI_ENGINE_ID);
+  return engine ?? null;
 }
 
 export const importService: ImportServiceType = {
@@ -75,13 +87,36 @@ export const importService: ImportServiceType = {
     const validator = getDefaultValidator();
     const { candidates, issues } = await validator.validate(normalized, context);
 
+    // AI Analysis: strictly additive and fail-safe. An unavailable
+    // engine, or one that throws, must never block the import flow -
+    // Validator's own output is already a complete, valid result on
+    // its own, so on any failure we just return it as-is rather than
+    // retrying or surfacing an error to the user.
+    let aiEngineId: string | undefined;
+    let aiWarnings: string[] | undefined;
+    let enrichedCandidates = candidates;
+
+    const engine = getAvailableAiEngine();
+    if (engine && (await engine.isAvailable())) {
+      try {
+        const analysis = await engine.analyze(candidates, context);
+        enrichedCandidates = applyAiEnrichments(candidates, analysis.enrichments);
+        aiEngineId = analysis.engineId;
+        aiWarnings = analysis.warnings.length > 0 ? analysis.warnings : undefined;
+      } catch (err) {
+        console.error('Smart Import: AI Analysis failed, continuing with rule-based output', err);
+      }
+    }
+
     return {
       sourceId,
       extractorId: extractor.id,
       normalizerId: normalizer.id,
-      candidates,
+      candidates: enrichedCandidates,
       issues,
       extractionWarnings: extracted.warnings,
+      aiEngineId,
+      aiWarnings,
     };
   },
 
