@@ -32,6 +32,25 @@ export default function ImportPreview({ result, categories, onConfirm, onCancel,
     setCandidates((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   };
 
+  const candidateById = useMemo(() => new Map(candidates.map((c) => [c.id, c])), [candidates]);
+
+  // AI Analysis only ever suggests a merge - it never merges
+  // automatically. This is the one explicit user action that performs
+  // it: fold the duplicate's quantity into the row it matched, then
+  // exclude the duplicate rather than deleting it outright (still
+  // visible, still re-includable, nothing is silently lost).
+  const mergeIntoDuplicate = (duplicateId: string, targetId: string) => {
+    setCandidates((prev) => {
+      const duplicate = prev.find((c) => c.id === duplicateId);
+      if (!duplicate) return prev;
+      return prev.map((c) => {
+        if (c.id === targetId) return { ...c, quantity: c.quantity + duplicate.quantity };
+        if (c.id === duplicateId) return { ...c, included: false, aiDuplicateOfCandidateId: null };
+        return c;
+      });
+    });
+  };
+
   if (candidates.length === 0) {
     return (
       <div className="text-center py-8 text-sm text-gray-500">
@@ -61,15 +80,23 @@ export default function ImportPreview({ result, categories, onConfirm, onCancel,
       </p>
 
       <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto">
-        {candidates.map((candidate) => (
-          <ImportPreviewRow
-            key={candidate.id}
-            candidate={candidate}
-            categories={categories}
-            warning={warningByCandidateId.get(candidate.id)}
-            onChange={(patch) => updateCandidate(candidate.id, patch)}
-          />
-        ))}
+        {candidates.map((candidate) => {
+          const duplicateTargetId = candidate.aiDuplicateOfCandidateId;
+          const duplicateTarget = duplicateTargetId ? candidateById.get(duplicateTargetId) : undefined;
+          return (
+            <ImportPreviewRow
+              key={candidate.id}
+              candidate={candidate}
+              categories={categories}
+              warning={warningByCandidateId.get(candidate.id)}
+              duplicateOfName={duplicateTarget?.name}
+              onChange={(patch) => updateCandidate(candidate.id, patch)}
+              onMergeIntoDuplicate={
+                duplicateTargetId ? () => mergeIntoDuplicate(candidate.id, duplicateTargetId) : undefined
+              }
+            />
+          );
+        })}
       </div>
 
       <div className="flex gap-2 pt-1">

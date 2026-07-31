@@ -20,7 +20,7 @@ interface ImportSheetProps {
   onClose: () => void;
 }
 
-type Step = 'source' | 'preview';
+type Step = 'source' | 'analyzing' | 'preview';
 
 export default function ImportSheet({ open, onClose }: ImportSheetProps) {
   const { categories } = useCategories();
@@ -55,6 +55,11 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
     if (!pasteText.trim()) return;
     setLoading(true);
     setError('');
+    // "Analyzing your shopping list..." - runImport now includes the
+    // AI Analysis stage (typically ~1-5s per the approved design), so
+    // this gets its own step/screen rather than just a disabled
+    // button label, per the requested loading UX.
+    setStep('analyzing');
     try {
       const validated = await importService.runImport(
         'paste-text',
@@ -69,6 +74,7 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
     } catch (err) {
       console.error('Smart Import: analyze failed', err);
       setError('לא ניתן היה לנתח את הטקסט. נסה/י שוב.');
+      setStep('source');
     } finally {
       setLoading(false);
     }
@@ -138,6 +144,16 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
           >
             {loading ? 'מנתח...' : 'ניתוח פריטים'}
           </button>
+        </div>
+      ) : step === 'analyzing' ? (
+        <div className="flex flex-col items-center gap-4 py-10">
+          <div
+            className="w-10 h-10 rounded-full border-[3px] border-purple-100 border-t-purple-600 animate-spin"
+            role="status"
+            aria-label="מנתח"
+          />
+          <p className="text-sm font-semibold text-gray-700">מנתח את רשימת הקניות שלך...</p>
+          <p className="text-xs text-gray-400">✨ מזהה כמויות, יחידות וקטגוריות</p>
         </div>
       ) : result ? (
         <ImportPreview

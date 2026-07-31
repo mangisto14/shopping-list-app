@@ -63,4 +63,36 @@ test.describe('Smart Import (Phase 1)', () => {
       expect(insertedItems.map((i) => i.name).sort()).toEqual(['חלב', 'לחם'].sort());
     }).toPass();
   });
+
+  test('Preview displays AI-enriched data: category suggestion badge and a duplicate merge suggestion', async ({
+    page,
+  }) => {
+    await seedAuthSession(page);
+    await enableExperimentalFeatures(page);
+    await mockListData(page, {
+      listName: 'הרשימה שלי',
+      ownerId: USER_ID,
+      categories: [{ id: 'cat-dairy', list_id: 'e2e0000-0000-0000-0000-000000000001', user_id: USER_ID, name: 'מוצרי חלב' }],
+    });
+
+    await page.goto('/lists');
+    await page.getByRole('button', { name: 'ייבוא חכם' }).click();
+
+    // "חלב" has no category yet -> AI Analysis should suggest the
+    // existing "מוצרי חלב" category (medium confidence, auto-applied +
+    // highlighted, per the approved confidence rule) and badge it.
+    // "עגבניה"/"עגבניות" are a near-duplicate pair within this same
+    // batch -> a merge suggestion, never applied automatically.
+    await page.locator('textarea').fill('חלב\nעגבניה\nעגבניות');
+    await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
+
+    await expect(page.locator('input[placeholder="שם הפריט"]')).toHaveCount(3);
+    await expect(page.getByText('מוצרי חלב')).toBeVisible();
+    await expect(page.locator('[title="הצעת AI - כדאי לבדוק"]')).toHaveCount(1);
+
+    const mergeBanner = page.getByText(/דומה ל/);
+    await expect(mergeBanner).toBeVisible();
+    await page.getByRole('button', { name: 'מיזוג' }).click();
+    await expect(mergeBanner).toHaveCount(0);
+  });
 });
