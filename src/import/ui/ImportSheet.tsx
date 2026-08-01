@@ -14,6 +14,7 @@ import { useItems } from '../../hooks/useItems';
 import { importService } from '../index';
 import type { ImportItemCandidate, ImportSourceId, ValidatedImportResult } from '../index';
 import ImportPreview from './ImportPreview';
+import ImportLoadingState from './ImportLoadingState';
 
 interface ImportSheetProps {
   open: boolean;
@@ -146,15 +147,7 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
           </button>
         </div>
       ) : step === 'analyzing' ? (
-        <div className="flex flex-col items-center gap-4 py-10">
-          <div
-            className="w-10 h-10 rounded-full border-[3px] border-purple-100 border-t-purple-600 animate-spin"
-            role="status"
-            aria-label="מנתח"
-          />
-          <p className="text-sm font-semibold text-gray-700">מנתח את רשימת הקניות שלך...</p>
-          <p className="text-xs text-gray-400">✨ מזהה כמויות, יחידות וקטגוריות</p>
-        </div>
+        <ImportLoadingState message="מנתח את רשימת הקניות שלך..." subMessage="✨ מכין הצעות AI" />
       ) : result ? (
         <ImportPreview
           result={result}
