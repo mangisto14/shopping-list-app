@@ -17,14 +17,36 @@
 // This never calls Claude/OpenAI/Gemini/OCR or any network API - every
 // answer here comes from parseQuantity.ts (plain regex/tokenization)
 // and the knowledge base (a static, in-memory lookup, loaded once).
-import type { AiItemEnrichment, ImportItemCandidate, ImportPipelineContext } from '../types';
-import { matchProduct } from '../knowledge/KnowledgeMatcher';
+import type { AiItemEnrichment, ConfidenceLevel, ImportItemCandidate, ImportPipelineContext } from '../types';
+import { matchProduct, type ProductMatchTier } from '../knowledge/KnowledgeMatcher';
 import { parseQuantity } from './parseQuantity';
 
 function resolveCategoryId(categoryName: string | null, context: ImportPipelineContext): string | null {
   if (!categoryName) return null;
   const match = context.existingCategories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
   return match?.id ?? null;
+}
+
+// Whether - and at what confidence - a resolved canonical name should
+// replace `candidate.name`. Deliberately keyed off the match TIER, not
+// KnowledgeMatcher's `nameConfidence` field: that field only answers
+// "is the *matched product portion* already spelled canonically",
+// which is a different question from "does the candidate's full name
+// field already equal the canonical spelling". They diverge whenever
+// RuleBasedNormalizer's own (narrower) regexes fail to strip a
+// quantity out of the name - e.g. "מלפפון 3" has no unit and a
+// trailing bare quantity, a format only this stage's parseQuantity
+// recognizes, so RuleBasedNormalizer leaves the whole raw line as the
+// name. In that case the product portion resolves at 'exact-product'
+// tier (מלפפון is already canonical) but `candidate.name` is still
+// "מלפפון 3" - very much in need of a rename. 'keyword'/'existing-
+// category' tiers never rename regardless (see KnowledgeMatcher.ts's
+// tier doc comment - a partial/token match isn't a strong enough
+// signal to rewrite the whole name).
+function renameConfidenceForTier(tier: ProductMatchTier): ConfidenceLevel | null {
+  if (tier === 'exact-product' || tier === 'alias') return 'high';
+  if (tier === 'fuzzy') return 'low';
+  return null;
 }
 
 function enrichmentIsEmpty(enrichment: AiItemEnrichment): boolean {
@@ -56,8 +78,9 @@ export function analyzeCandidate(candidate: ImportItemCandidate, context: Import
     enrichment.unit = { value: match.defaultUnit, confidence: 'low', reason: 'Typical unit for this product' };
   }
 
-  if (match.nameConfidence && match.canonicalName && match.canonicalName !== candidate.name) {
-    enrichment.name = { value: match.canonicalName, confidence: match.nameConfidence, reason: 'Recognized product name' };
+  const renameConfidence = renameConfidenceForTier(match.matchTier);
+  if (renameConfidence && match.canonicalName && match.canonicalName !== candidate.name) {
+    enrichment.name = { value: match.canonicalName, confidence: renameConfidence, reason: 'Recognized product name' };
   }
 
   if (!candidate.categoryId && match.categoryName && match.categoryConfidence) {

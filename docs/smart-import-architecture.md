@@ -379,6 +379,86 @@ This is a real DOM-size reduction: previously an import of 30-50 items mounted 3
 
 No change to `ImportService`, the pipeline, any provider, `useItems`/`useCategories`, or `ImportSheet`'s state-lifting/sticky-footer wiring from the previous pass - this is a pure Preview-UI restructuring.
 
+## Phase 2B (implemented): Knowledge Base & deterministic Semantic Analysis
+
+A non-AI understanding layer, built and fully verified *before* any real AI/OCR/vendor integration - no network call, no Claude/OpenAI/Gemini/OCR SDK anywhere in this phase. Recognizes common grocery products, quantities, units, and categories from plain text using a static, in-memory knowledge base plus deterministic parsing.
+
+### `src/import/knowledge/` - the single source of truth
+
+```
+src/import/knowledge/
+  categories.ts    KNOWLEDGE_CATEGORIES - re-lists theme/categoryStyles.ts's real category
+                   names as this module's own literal union, with zero import from the
+                   theme layer (pure data, must never need to change if styling does)
+  units.ts         UNIT_SYNONYMS + normalizeUnit() - whole-token unit normalization
+                   (קילו/ק"ג/קילוגרם -> ק"ג, גר/גרם -> גרם, יח/יחידה -> יח', ל/ליטר -> ליטר, ...)
+  aliases.ts       REQUIRED_ABBREVIATION_ALIASES - the 4 spec-mandated abbreviations
+                   (תפ"א, מלפ', עגב', נס), kept separate so they stay grep-able
+  brands.ts        KNOWLEDGE_BRANDS - brand names (תנובה, טרה) x product id combos;
+                   KnowledgeBase.ts generates one alias per combo at load time (e.g.
+                   "חלב תנובה") instead of hand-writing every combination in products.ts
+  products.ts      KNOWLEDGE_PRODUCTS - ~17 entries (id, canonicalName, aliases, category,
+                   defaultUnit, optional brand/keywords). Rice/pasta were considered and
+                   dropped - neither maps cleanly onto any existing category, and guessing
+                   one would mean inventing a category placement
+  KnowledgeBase.ts Facade built ONCE at module load: a productById Map and an aliasIndex
+                   Map (canonical names + aliases + generated brand combos), never
+                   re-scanned per call
+  KnowledgeMatcher.ts  matchProduct(rawName, context) - the 5-tier resolution below
+  index.ts         Public barrel - every current and future import source (AI, OCR,
+                   Camera, Gallery, WhatsApp, Apple Notes/Reminders, CSV, Excel) is
+                   expected to import from here rather than hardcoding grocery knowledge
+```
+
+### Category resolution priority (`KnowledgeMatcher.matchProduct`)
+
+1. **Exact product match** - the normalized input equals a product's own canonical name exactly.
+2. **Alias match** - equals one of that product's aliases (including a brand-combo alias), or is one of the 4 required abbreviations. Confidence for a resulting rename: **high**.
+3. **Keyword match** - either a single whole *token* of the input is itself an exact product/alias match (e.g. "חלב" inside "חלב 3%"), or the input contains one of a product's `keywords` substrings (e.g. "עגבני" catches "עגבניה"/"עגבנייה"/"עגבניות" without enumerating every inflection). **Never renames the name** - a partial/token match isn't a strong enough signal to rewrite the whole name field (this is what keeps Phase 2's own "עגבניה"/"עגבניות" duplicate-suggestion test passing unchanged: neither gets renamed, so the Heuristic engine's duplicate detector still compares the same two original strings it always did).
+4. **Existing-category match** - independent of the product list entirely: the input textually contains one of *this user's own real* category names.
+5. **Fuzzy match** - Levenshtein distance ≤ 2 against any known canonical name/alias (strings under 4 characters are excluded, mirroring `HeuristicTextUnderstandingEngine`'s own duplicate-detection guard). The weakest signal - both a resulting rename and category are **low** confidence.
+6. **None** - nothing recognized. Category and name are left untouched; **a category is never invented**.
+
+Category confidence is deliberately capped at **medium**, even for an exact product match - a category is a judgment call (the same product can reasonably belong to more than one store section), so this module never claims "high" for it. Only quantity/unit values parsed directly out of the raw text itself (not a knowledge-base guess) warrant "high".
+
+### `parseQuantity` - the quantity/unit parser (`src/import/semantic/parseQuantity.ts`)
+
+Recognizes all 9 required formats (`"3 מלפפון"`, `"מלפפון 3"`, `"3x מלפפון"`, `"מלפפון x3"`, `"מלפפון ×3"`, `"2 יח מלפפון"`, `"500 גרם גבינה"`, `'2 ק"ג תפוחים'`, `"1.5 ליטר חלב"`), returning the quantity, unit (if present), and the remaining product-name text.
+
+Deliberately **not** one monolithic regex - two bugs were found and designed around before writing any code:
+
+1. A single regex with an optional unit group between two whitespace-consuming pieces can fail to match a leading bare quantity with no unit at all - the leading `\s*` greedily consumes the only space, leaving nothing for a later mandatory `\s+`.
+2. Matching a unit via regex alternation risks a short synonym partial-matching inside an unrelated word - e.g. "מל" (מ"ל/milliliter) is a literal prefix of "מלפפון" (cucumber).
+
+Both are avoided by splitting the line into whitespace-separated tokens and checking a unit synonym only as a **whole token** via `normalizeUnit()`, never as a substring - the same discipline `RuleBasedNormalizer`'s own Hebrew-`\b` fix (Phase 1) established, applied one level further.
+
+### `SemanticAnalyzer` - wiring into the pipeline
+
+Pipeline is now: `Source → Extractor → Rule-Based Normalizer → Validator → Semantic Analysis → AI Analysis → Preview → Import`.
+
+The originally-sketched diagram (`... → Knowledge Matcher → Semantic Analyzer → Rule-Based Normalizer → ...`) implied semantic understanding happens *before* normalization. The actual wiring runs it *after* `Validator`, in parallel with (immediately before) the existing AI Analysis stage instead - re-parsing each candidate's original `rawText` rather than `RuleBasedNormalizer`'s already-processed `name`, which is what lets it recognize formats `RuleBasedNormalizer`'s narrower regexes miss (e.g. a trailing bare quantity) without modifying `RuleBasedNormalizer` at all. This is a deliberate, documented trade-off to honor the "do not change `RuleBasedNormalizer`/`Validator`" constraint - the net effect on recognized formats is identical either way.
+
+Applied via the **exact same `applyAiEnrichments()` merge function** Phase 2's AI Analysis stage already uses, and producing the exact same `AiItemEnrichment` shape - so Semantic Analysis's results appear in Preview through the same badges/pending-suggestion UI with **zero Preview code changes**. Because it runs first, `HeuristicTextUnderstandingEngine`'s existing guards (`if (!candidate.unit)`, `if (!candidate.categoryId)`) naturally skip any field Semantic Analysis already resolved - the two stages never fight over the same field, with no new coordination logic needed.
+
+A rename is only ever proposed when a match's tier is `exact-product`, `alias`, or `fuzzy` **and** the canonical name actually differs from the candidate's current name - not whenever the *matched product portion* happens to already be canonical. These are different questions: `RuleBasedNormalizer` fails to strip a trailing bare quantity (a format only `parseQuantity` recognizes), so `"מלפפון 3"` reaches this stage as the candidate name `"מלפפון 3"` in full, even though the product portion (`"מלפפון"`) is already an exact match. Gating the rename on "already canonical" alone (an earlier draft of this logic) would have silently left the stray `"3"` in the name - caught during e2e testing, not by any unit test, since the unit test had unrealistically pre-cleaned the candidate's name.
+
+Both this stage and the AI Analysis stage below it are wrapped in their own try/catch - a throw in either must never block the import flow, matching Phase 2's existing fail-safe discipline. Semantic Analysis never calls Claude/OpenAI/Gemini/OCR or any network API; every answer comes from `parseQuantity.ts` (regex/tokenization) and the knowledge base (a static, in-memory lookup, loaded once).
+
+### `categoryId` vs `categoryName` - a documented trade-off
+
+`KnowledgeMatcher` resolves a `categoryName` string whenever a product is recognized, independent of any one user's real categories. The real, attachable `categoryId` is only set if a category with that exact name already exists in `context.existingCategories` (case-insensitive) - otherwise it stays `null`, even though `categoryName` (and the badge) still display. This means a suggested category can be visible in Preview without being committable as-is; creating a new category row on the user's behalf is out of scope for this phase (it touches business logic Phase 2B is explicitly not allowed to change). The user can still pick a real category manually in the editor before confirming.
+
+### Tests
+
+- `src/import/knowledge/__tests__/KnowledgeMatcher.test.ts` (16 tests) - canonicalization, aliases (including the 4 required abbreviations and generated brand combos), keyword-tier non-renaming, category-resolution priority (including "never invents a category"), and confidence (never numeric, category capped at medium).
+- `src/import/semantic/__tests__/parseQuantity.test.ts` (12 tests) - all 9 required formats, plus no-quantity and prefix-ambiguity regression guards.
+- `src/import/semantic/__tests__/SemanticAnalyzer.test.ts` (9 tests) - the 5 scenarios required by the spec, "never re-suggest an already-correct field," and the low-confidence unit fallback.
+- `e2e/smart-import-semantic.spec.ts` - all 5 required scenarios end-to-end through the real Preview UI, in a file of its own so Phase 2/2A's existing e2e coverage (AI Analysis badges, the single shared editor) stays untouched and provably unaffected.
+
+### Validation
+
+TypeScript, production build, lint, all 88 Vitest unit tests, and the full Playwright e2e suite (including Phase 1/2/2A's pre-existing specs) all pass with this change. Two pre-existing unit test assertions were updated (not reverted) because the new behavior they exercise is legitimately different and spec-required: `"2x milk\nbread"` now canonicalizes to `["חלב", "לחם"]` (Semantic Analysis's job), and a failing AI engine no longer implies untouched `aiSuggestions` (Semantic Analysis is an independent stage that still ran).
+
 ## Future enhancement (not part of Phase 1): optional AI Review stage
 
 **Not implemented. Not scheduled. This section exists only to confirm the Phase 1 architecture reserves room for it, so adding it later doesn't force a redesign.**

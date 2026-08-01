@@ -1,0 +1,67 @@
+// e2e/smart-import-semantic.spec.ts
+// Smart Import Phase 2B: the deterministic knowledge base + semantic
+// analysis layer (src/import/knowledge/, src/import/semantic/) - no
+// AI/OCR/vendor call involved. Covers the 5 scenarios explicitly
+// required by the Phase 2B spec. Kept in its own file rather than
+// added to smart-import.spec.ts so that file's existing coverage of
+// the AI Analysis stage (Phase 2) and the single shared editor
+// (refinement pass) stays untouched.
+import { test, expect } from '@playwright/test';
+import { seedAuthSession, mockListData, USER_ID } from './fixtures';
+
+async function enableExperimentalFeatures(page: import('@playwright/test').Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('dev-settings:featureFlags', JSON.stringify({ enableExperimentalFeatures: true }));
+  });
+}
+
+test.describe('Smart Import (Phase 2B - Knowledge Base & Semantic Analysis)', () => {
+  test('recognizes quantity, unit, product name, and category with no AI call for 5 required inputs', async ({
+    page,
+  }) => {
+    await seedAuthSession(page);
+    await enableExperimentalFeatures(page);
+    await mockListData(page, {
+      listName: 'הרשימה שלי',
+      ownerId: USER_ID,
+      categories: [
+        { id: 'cat-dairy', list_id: 'e2e0000-0000-0000-0000-000000000001', user_id: USER_ID, name: 'מוצרי חלב' },
+        { id: 'cat-veg', list_id: 'e2e0000-0000-0000-0000-000000000001', user_id: USER_ID, name: 'ירקות' },
+        { id: 'cat-fruit', list_id: 'e2e0000-0000-0000-0000-000000000001', user_id: USER_ID, name: 'פירות' },
+      ],
+    });
+
+    await page.goto('/lists');
+    await page.getByRole('button', { name: 'ייבוא חכם' }).click();
+
+    await page.locator('textarea').fill(['מלפפון 3', '2 ק"ג תפוחים', 'Milk x2', 'חלב תנובה', 'תפ"א'].join('\n'));
+    await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
+    await expect(page.getByText('🤖 ניתוח AI הושלם')).toBeVisible();
+
+    // 1. "מלפפון 3" -> quantity 3, category ירקות
+    const cucumberRow = page.getByRole('button', { name: /^כלול פריט זה בייבוא מלפפון/ });
+    await expect(cucumberRow).toContainText('3');
+    await expect(cucumberRow).toContainText('ירקות');
+
+    // 2. '2 ק"ג תפוחים' -> quantity 2, unit ק"ג, category פירות (the
+    // product name may also canonicalize תפוחים -> תפוח - either
+    // spelling is a correct match; the negative lookahead just avoids
+    // colliding with the unrelated "תפוח אדמה"/potato row below).
+    const appleRow = page.getByRole('button', { name: /^כלול פריט זה בייבוא תפוח(ים)?(?! אדמה)/ });
+    await expect(appleRow).toContainText('2 ק"ג');
+    await expect(appleRow).toContainText('פירות');
+
+    // 3 + 4. "Milk x2" and "חלב תנובה" both canonicalize to the same
+    // product name "חלב" - two independent rows, so assert on the
+    // pair rather than a single unique match.
+    const milkRows = page.getByRole('button', { name: /^כלול פריט זה בייבוא חלב/ });
+    await expect(milkRows).toHaveCount(2);
+    await expect(milkRows.nth(0)).toContainText('2'); // "Milk x2" -> quantity 2
+    await expect(milkRows.nth(0)).toContainText('מוצרי חלב');
+    await expect(milkRows.nth(1)).toContainText('מוצרי חלב'); // "חלב תנובה" -> category מוצרי חלב
+
+    // 5. 'תפ"א' -> product תפוח אדמה, category ירקות
+    const potatoRow = page.getByRole('button', { name: /^כלול פריט זה בייבוא תפוח אדמה/ });
+    await expect(potatoRow).toContainText('ירקות');
+  });
+});

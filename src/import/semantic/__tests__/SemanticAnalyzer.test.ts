@@ -28,10 +28,16 @@ function candidate(overrides: Partial<ImportItemCandidate>): ImportItemCandidate
 }
 
 describe('analyzeCandidate - the 5 required Phase 2B scenarios', () => {
-  it('"מלפפון 3" -> quantity 3, category ירקות', () => {
-    const c = candidate({ id: 'c1', rawText: '3 מלפפון', name: 'מלפפון', quantity: 1 });
+  it('"מלפפון 3" -> quantity 3, category ירקות, name cleaned to מלפפון', () => {
+    // RuleBasedNormalizer's own regexes only recognize a LEADING
+    // quantity+unit or a leading "Nx"/"N x" multiplier - a trailing
+    // bare quantity with no unit at all is a format only this stage's
+    // parseQuantity recognizes, so the candidate this stage actually
+    // receives still has the raw, unstripped line as its name.
+    const c = candidate({ id: 'c1', rawText: 'מלפפון 3', name: 'מלפפון 3', quantity: 1 });
     const enrichment = analyzeCandidate(c, context);
     expect(enrichment.quantity).toMatchObject({ value: 3, confidence: 'high' });
+    expect(enrichment.name).toMatchObject({ value: 'מלפפון', confidence: 'high' });
     expect(enrichment.category?.value).toMatchObject({ name: 'ירקות' });
   });
 
