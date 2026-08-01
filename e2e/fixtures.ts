@@ -45,6 +45,17 @@ interface MockDataOptions {
   profiles?: unknown[];
   listName?: string;
   ownerId?: string;
+  // Smart Import (Phase 2C): user_import_learning rows and the
+  // import-ai-assistant Edge Function's response - defaulted to "no
+  // saved corrections" / "no suggestions, but the call itself
+  // succeeds" so every pre-existing Smart Import test's assertions
+  // (which predate Learning/AI Assistant existing at all) keep
+  // observing the same aiEngineId-gated summary behavior as before,
+  // without needing every one of those tests to know about either
+  // endpoint. A test that specifically exercises Learning or the AI
+  // Assistant's suggestions passes its own values instead.
+  learningRows?: unknown[];
+  aiAssistantResponse?: { providerId?: string; suggestions?: unknown[]; warnings?: unknown[] } | 'error';
 }
 
 // Mocks the REST endpoints the app's hooks call for a single active
@@ -62,6 +73,8 @@ export async function mockListData(page: Page, options: MockDataOptions = {}) {
     profiles = [{ id: USER_ID, email: 'owner@example.com' }],
     listName = 'משפחת מנגיסטו',
     ownerId = USER_ID,
+    learningRows = [],
+    aiAssistantResponse = { providerId: 'test-ai-assistant', suggestions: [], warnings: [] },
   } = options;
 
   const lists = [
@@ -130,6 +143,22 @@ export async function mockListData(page: Page, options: MockDataOptions = {}) {
   await page.route('**/rest/v1/profiles*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(profiles) })
   );
+
+  await page.route('**/rest/v1/user_import_learning*', async (route) => {
+    const method = route.request().method();
+    if (method === 'POST') {
+      const body = JSON.parse(route.request().postData() || '{}');
+      return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify([body]) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(learningRows) });
+  });
+
+  await page.route('**/functions/v1/import-ai-assistant*', async (route) => {
+    if (aiAssistantResponse === 'error') {
+      return route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'simulated Edge Function failure' }) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(aiAssistantResponse) });
+  });
 }
 
 // Mocks the invite_member_by_email RPC. Pass `errorCode` to simulate

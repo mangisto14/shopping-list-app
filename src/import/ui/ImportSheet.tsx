@@ -20,8 +20,10 @@ import { useEffect, useState } from 'react';
 import BottomSheet from '../../components/ui/BottomSheet';
 import { useCategories } from '../../hooks/useCategories';
 import { useItems } from '../../hooks/useItems';
+import { useAuth } from '../../hooks/useAuth';
+import { useLanguage } from '../../LanguageContext';
 import { importService } from '../index';
-import type { ImportItemCandidate, ImportSourceId, ValidatedImportResult } from '../index';
+import type { ImportItemCandidate, ImportPipelineContext, ImportSourceId, ValidatedImportResult } from '../index';
 import ImportPreview from './ImportPreview';
 import ImportLoadingState from './ImportLoadingState';
 
@@ -35,6 +37,8 @@ type Step = 'source' | 'analyzing' | 'preview';
 export default function ImportSheet({ open, onClose }: ImportSheetProps) {
   const { categories } = useCategories();
   const { items, addItem } = useItems();
+  const { user } = useAuth();
+  const { language } = useLanguage();
 
   const [step, setStep] = useState<Step>('source');
   const [sources, setSources] = useState<{ id: ImportSourceId; label: string; icon: string; available: boolean }[]>(
@@ -65,6 +69,18 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
     });
   }, [open]);
 
+  // Shared by both runImport (analyze) and saveLearning (confirm) -
+  // userId/language (Phase 2C) are optional on ImportPipelineContext,
+  // so a still-loading/logged-out user just means Learning/AI Assistant
+  // are skipped (see ImportService.runImport's own graceful-degradation
+  // handling), never an error here.
+  const buildContext = (): ImportPipelineContext => ({
+    existingCategories: categories.map((c) => ({ id: c.id, name: c.name })),
+    existingItemNames: items.map((i) => i.name),
+    userId: user?.id,
+    language,
+  });
+
   const handleAnalyze = async () => {
     if (!pasteText.trim()) return;
     setLoading(true);
@@ -75,14 +91,7 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
     // button label, per the requested loading UX.
     setStep('analyzing');
     try {
-      const validated = await importService.runImport(
-        'paste-text',
-        {
-          existingCategories: categories.map((c) => ({ id: c.id, name: c.name })),
-          existingItemNames: items.map((i) => i.name),
-        },
-        { kind: 'text', text: pasteText }
-      );
+      const validated = await importService.runImport('paste-text', buildContext(), { kind: 'text', text: pasteText });
       setResult(validated);
       setCandidates(validated.candidates);
       setStep('preview');
@@ -121,6 +130,14 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
     setSubmitting(true);
     try {
       await importService.commit({ ...result, candidates }, addItem);
+      // Phase 2C, STEP5: diffs the pipeline's original output
+      // (`result.candidates` - untouched, since `candidates` state was
+      // always a separate copy updateCandidate mutates) against what
+      // the user actually confirmed, storing only genuinely changed
+      // fields. Never blocks/undoes the import that already succeeded
+      // above - a learning-save failure is logged inside ImportService/
+      // LearningRepository, never surfaced here.
+      await importService.saveLearning(result.candidates, candidates, buildContext());
       onClose();
     } finally {
       setSubmitting(false);
