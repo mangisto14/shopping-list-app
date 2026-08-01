@@ -96,33 +96,47 @@ export const learningRepository = {
     return result;
   },
 
-  // Upserts one correction, keyed by (user_id, original_text) - a later
-  // correction for the same phrase replaces the earlier one, matching
-  // the migration's unique constraint. Only ever called with fields
-  // that actually changed (see ImportService.saveLearning) - never
-  // writes an unchanged AI/rule-based suggestion.
-  async saveCorrection(userId: string, originalText: string, correction: LearningCorrection): Promise<void> {
-    const normalizedText = normalizeForComparison(originalText);
-    if (!normalizedText) return;
+  // Upserts every correction from one import in a SINGLE request
+  // (PostgREST accepts an array for a bulk upsert) rather than one
+  // round-trip per corrected row - the same "never call one item at a
+  // time" discipline STEP7 asks of the AI Assistant, applied here too.
+  // Keyed by (user_id, original_text) - a later correction for the same
+  // phrase replaces the earlier one, matching the migration's unique
+  // constraint. Only ever called with fields that actually changed
+  // (see ImportService.saveLearning) - never writes an unchanged AI/
+  // rule-based suggestion.
+  async saveCorrections(
+    userId: string,
+    corrections: { originalText: string; correction: LearningCorrection }[]
+  ): Promise<void> {
+    const entries = corrections
+      .map(({ originalText, correction }) => {
+        const normalizedText = normalizeForComparison(originalText);
+        return normalizedText ? { normalizedText, correction } : null;
+      })
+      .filter((entry): entry is { normalizedText: string; correction: LearningCorrection } => entry !== null);
 
-    const { error } = await supabase.from('user_import_learning').upsert(
-      {
-        user_id: userId,
-        original_text: normalizedText,
-        normalized_name: correction.normalizedName ?? null,
-        category_id: correction.categoryId ?? null,
-        unit: correction.unit ?? null,
-        quantity: correction.quantity ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,original_text' }
-    );
+    if (entries.length === 0) return;
+
+    const rows = entries.map(({ normalizedText, correction }) => ({
+      user_id: userId,
+      original_text: normalizedText,
+      normalized_name: correction.normalizedName ?? null,
+      category_id: correction.categoryId ?? null,
+      unit: correction.unit ?? null,
+      quantity: correction.quantity ?? null,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabase.from('user_import_learning').upsert(rows, { onConflict: 'user_id,original_text' });
 
     if (error) {
-      console.error('Smart Import: saving a learning correction failed', error);
+      console.error('Smart Import: saving learning corrections failed', error);
       return;
     }
 
-    rememberInCache(userId, normalizedText, correction);
+    for (const { normalizedText, correction } of entries) {
+      rememberInCache(userId, normalizedText, correction);
+    }
   },
 };

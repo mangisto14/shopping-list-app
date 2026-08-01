@@ -88,12 +88,14 @@ if (typeof Deno !== 'undefined') {
   const { createClaudeProvider } = await import('./providers/ClaudeProvider.ts');
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   const model = Deno.env.get('ANTHROPIC_MODEL') || undefined;
+  // Built once at startup, not per-request - apiKey/model never change
+  // for the lifetime of this function instance.
+  const provider = apiKey ? createClaudeProvider(apiKey, model) : null;
 
   Deno.serve((req) => {
-    if (!apiKey) {
+    if (!provider) {
       return jsonResponse({ error: 'ANTHROPIC_API_KEY is not configured' }, 500);
     }
-    const provider = createClaudeProvider(apiKey, model);
     return handleRequest(req, { provider });
   });
 }

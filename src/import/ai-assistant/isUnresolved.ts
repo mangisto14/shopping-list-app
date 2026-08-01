@@ -13,6 +13,14 @@
 // "unknown quantity" state distinct from "quantity 1" to detect here;
 // inventing one would mean guessing at intent no earlier stage
 // actually expressed.
+//
+// Deliberately does NOT check `aiPendingQuantity`, unlike the other
+// three `aiPending*` fields: by construction, nothing that runs before
+// this check (Semantic Analysis, Learning Lookup) is ever able to
+// produce a low-confidence quantity suggestion - only the AI Assistant
+// itself can, and it only runs *after* this predicate decides who to
+// call. There is nothing for this check to find yet at this point in
+// the pipeline, so omitting it is exact, not merely an approximation.
 import type { ImportItemCandidate } from '../types';
 
 export function isUnresolved(candidate: ImportItemCandidate): boolean {

@@ -46,7 +46,10 @@ test.describe('Smart Import (Phase 2C - User Learning + AI Assistant)', () => {
 
     const learningWrites: unknown[] = [];
     await page.route('**/rest/v1/user_import_learning*', async (route) => {
-      if (route.request().method() === 'POST') learningWrites.push(JSON.parse(route.request().postData() || '{}'));
+      // Corrections are saved as a single batched upsert (an array
+      // body), even when there's only one - see
+      // LearningRepository.saveCorrections.
+      if (route.request().method() === 'POST') learningWrites.push(...JSON.parse(route.request().postData() || '[]'));
       await route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
     });
 
@@ -84,7 +87,10 @@ test.describe('Smart Import (Phase 2C - User Learning + AI Assistant)', () => {
 
     const learningWrites: { category_id?: string; original_text?: string }[] = [];
     await page.route('**/rest/v1/user_import_learning*', async (route) => {
-      if (route.request().method() === 'POST') learningWrites.push(JSON.parse(route.request().postData() || '{}'));
+      // Corrections are saved as a single batched upsert (an array
+      // body), even when there's only one - see
+      // LearningRepository.saveCorrections.
+      if (route.request().method() === 'POST') learningWrites.push(...JSON.parse(route.request().postData() || '[]'));
       await route.fulfill({ status: 201, contentType: 'application/json', body: '[]' });
     });
 

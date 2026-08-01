@@ -9,6 +9,7 @@
 // is running.
 import type {
   AddItemFn,
+  AiItemEnrichment,
   ImportItemCandidate,
   ImportPipelineContext,
   ImportService as ImportServiceType,
@@ -69,6 +70,30 @@ function getAvailableAiAssistantProvider() {
   return provider ?? null;
 }
 
+// Every pipeline stage from Semantic Analysis onward shares the same
+// fail-safe shape: compute this stage's enrichments, merge them via
+// applyAiEnrichments, and never let a failure here block the import -
+// the pipeline's output so far is already complete and valid on its
+// own. Factored out once rather than repeating the same try/catch/
+// console.error at each call site. Returns the stage's own enrichments
+// alongside the merged candidates so a caller that needs to know
+// exactly which candidates a stage touched (Learning Lookup, to
+// exclude them from the AI Assistant batch) can do so without
+// re-deriving it.
+async function safelyEnrich(
+  candidates: ImportItemCandidate[],
+  stageName: string,
+  buildEnrichments: () => Promise<AiItemEnrichment[]> | AiItemEnrichment[]
+): Promise<{ candidates: ImportItemCandidate[]; enrichments: AiItemEnrichment[] }> {
+  try {
+    const enrichments = await buildEnrichments();
+    return { candidates: applyAiEnrichments(candidates, enrichments), enrichments };
+  } catch (err) {
+    console.error(`Smart Import: ${stageName} failed, continuing without it`, err);
+    return { candidates, enrichments: [] };
+  }
+}
+
 export const importService: ImportServiceType = {
   async listSources() {
     return Promise.all(
@@ -101,30 +126,19 @@ export const importService: ImportServiceType = {
 
     // Semantic Analysis (Phase 2B): a deterministic, non-AI knowledge-
     // base lookup (see knowledge/ and semantic/parseQuantity.ts) - no
-    // network call, no vendor SDK. Strictly additive and fail-safe: a
-    // throw here must never block the import flow. Applied via
-    // applyAiEnrichments() so its badges/pending-suggestion UI light up
-    // with zero Preview code changes - every later stage reuses the
-    // exact same merge function for the exact same reason.
-    let semanticCandidates = candidates;
-    try {
-      const semanticEnrichments = analyzeCandidates(candidates, context);
-      semanticCandidates = applyAiEnrichments(candidates, semanticEnrichments);
-    } catch (err) {
-      console.error('Smart Import: Semantic Analysis failed, continuing with rule-based output', err);
-    }
+    // network call, no vendor SDK. Applied via applyAiEnrichments() so
+    // its badges/pending-suggestion UI light up with zero Preview code
+    // changes - every later stage reuses the exact same merge function
+    // for the exact same reason.
+    const semantic = await safelyEnrich(candidates, 'Semantic Analysis', () => analyzeCandidates(candidates, context));
 
     // Local Batch Heuristics (ambiguous-name flagging + within-batch
     // duplicate detection) - always on, no network, independent of
     // Learning/AI Assistant below (see local/BatchHeuristics.ts for why
     // these two checks aren't part of the AI Assistant's contract).
-    let localCandidates = semanticCandidates;
-    try {
-      const localEnrichments = detectBatchIssues(semanticCandidates);
-      localCandidates = applyAiEnrichments(semanticCandidates, localEnrichments);
-    } catch (err) {
-      console.error('Smart Import: local batch heuristics failed, continuing without them', err);
-    }
+    const local = await safelyEnrich(semantic.candidates, 'local batch heuristics', () =>
+      detectBatchIssues(semantic.candidates)
+    );
 
     // User Learning Lookup (Phase 2C, STEP2/STEP6): before any AI call,
     // check for a past correction for each line. A hit is applied
@@ -133,7 +147,7 @@ export const importService: ImportServiceType = {
     // unresolved-items filter below, so a learned item is genuinely
     // skipped from the AI Assistant batch entirely, not just re-
     // suggested alongside it.
-    let learnedCandidates = localCandidates;
+    let learnedCandidates = local.candidates;
     // Every candidate id a learning correction actually touched -
     // tracked separately from "is this candidate still unresolved
     // after the merge" below, since STEP2 is unconditional ("If a
@@ -142,21 +156,15 @@ export const importService: ImportServiceType = {
     // this item", even if it leaves unit unset. Re-sending it to AI
     // just because one other field remains empty would defeat the
     // entire point of learning from a past correction.
-    const learnedCandidateIds = new Set<string>();
+    let learnedCandidateIds = new Set<string>();
     if (context.userId) {
-      try {
-        const corrections = await learningRepository.lookupMany(
-          context.userId,
-          localCandidates.map((c) => c.rawText)
-        );
-        if (corrections.size > 0) {
-          const learningEnrichments = correctionsToEnrichments(localCandidates, corrections, context);
-          for (const enrichment of learningEnrichments) learnedCandidateIds.add(enrichment.candidateId);
-          learnedCandidates = applyAiEnrichments(localCandidates, learningEnrichments);
-        }
-      } catch (err) {
-        console.error('Smart Import: learning lookup failed, continuing without it', err);
-      }
+      const userId = context.userId;
+      const learning = await safelyEnrich(local.candidates, 'learning lookup', async () => {
+        const corrections = await learningRepository.lookupMany(userId, local.candidates.map((c) => c.rawText));
+        return corrections.size > 0 ? correctionsToEnrichments(local.candidates, corrections, context) : [];
+      });
+      learnedCandidates = learning.candidates;
+      learnedCandidateIds = new Set(learning.enrichments.map((e) => e.candidateId));
     }
 
     // AI Assistant (Phase 2C, STEP3): only candidates still unresolved
@@ -237,6 +245,10 @@ export const importService: ImportServiceType = {
     if (!context.userId) return;
 
     const originalById = new Map(originalCandidates.map((c) => [c.id, c]));
+    // Collected first, then sent as ONE batched upsert (see
+    // LearningRepository.saveCorrections) - correcting several rows in
+    // a single import must not mean one network round-trip per row.
+    const corrections: { originalText: string; correction: LearningCorrection }[] = [];
 
     for (const edited of editedCandidates) {
       const original = originalById.get(edited.id);
@@ -253,8 +265,10 @@ export const importService: ImportServiceType = {
       if (edited.quantity !== original.quantity) correction.quantity = edited.quantity;
 
       if (Object.keys(correction).length === 0) continue;
-
-      await learningRepository.saveCorrection(context.userId, original.rawText, correction);
+      corrections.push({ originalText: original.rawText, correction });
     }
+
+    if (corrections.length === 0) return;
+    await learningRepository.saveCorrections(context.userId, corrections);
   },
 };

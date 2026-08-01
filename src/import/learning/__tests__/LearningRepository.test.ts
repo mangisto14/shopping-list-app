@@ -82,41 +82,70 @@ describe('learningRepository.lookupMany', () => {
   });
 });
 
-describe('learningRepository.saveCorrection', () => {
+describe('learningRepository.saveCorrections', () => {
   it('upserts only the provided fields, normalizing the text key', async () => {
     upsertMock.mockResolvedValue({ error: null });
     const repo = await importRepository();
 
-    await repo.saveCorrection('user-1', '  קישוא  ', { categoryId: 'cat-fruit' });
+    await repo.saveCorrections('user-1', [{ originalText: '  קישוא  ', correction: { categoryId: 'cat-fruit' } }]);
 
     expect(fromMock).toHaveBeenCalledWith('user_import_learning');
     expect(upsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        user_id: 'user-1',
-        original_text: 'קישוא',
-        category_id: 'cat-fruit',
-        normalized_name: null,
-        unit: null,
-        quantity: null,
-      }),
+      [
+        expect.objectContaining({
+          user_id: 'user-1',
+          original_text: 'קישוא',
+          category_id: 'cat-fruit',
+          normalized_name: null,
+          unit: null,
+          quantity: null,
+        }),
+      ],
       { onConflict: 'user_id,original_text' }
     );
   });
 
-  it('populates the cache so an immediate lookup does not re-query', async () => {
+  it('sends every correction from one call as a SINGLE batched upsert, never one request per row', async () => {
     upsertMock.mockResolvedValue({ error: null });
     const repo = await importRepository();
 
-    await repo.saveCorrection('user-1', 'קישוא', { categoryId: 'cat-fruit' });
-    const result = await repo.lookupMany('user-1', ['קישוא']);
+    await repo.saveCorrections('user-1', [
+      { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' } },
+      { originalText: 'חלב', correction: { unit: 'ליטר' } },
+    ]);
+
+    expect(upsertMock).toHaveBeenCalledTimes(1);
+    const [rows] = upsertMock.mock.calls[0];
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r: { original_text: string }) => r.original_text)).toEqual(['קישוא', 'חלב']);
+  });
+
+  it('makes no request at all when given an empty list', async () => {
+    const repo = await importRepository();
+    await repo.saveCorrections('user-1', []);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('populates the cache for every saved row so an immediate lookup does not re-query', async () => {
+    upsertMock.mockResolvedValue({ error: null });
+    const repo = await importRepository();
+
+    await repo.saveCorrections('user-1', [
+      { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' } },
+      { originalText: 'חלב', correction: { unit: 'ליטר' } },
+    ]);
+    const result = await repo.lookupMany('user-1', ['קישוא', 'חלב']);
 
     expect(inMock).not.toHaveBeenCalled();
     expect(result.get('קישוא')).toEqual({ categoryId: 'cat-fruit' });
+    expect(result.get('חלב')).toEqual({ unit: 'ליטר' });
   });
 
   it('never throws on a save error', async () => {
     upsertMock.mockResolvedValue({ error: { message: 'write failed' } });
     const repo = await importRepository();
-    await expect(repo.saveCorrection('user-1', 'קישוא', { unit: "יח'" })).resolves.toBeUndefined();
+    await expect(
+      repo.saveCorrections('user-1', [{ originalText: 'קישוא', correction: { unit: "יח'" } }])
+    ).resolves.toBeUndefined();
   });
 });

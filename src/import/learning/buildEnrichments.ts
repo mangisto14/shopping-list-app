@@ -10,6 +10,8 @@ import { normalizeForComparison } from '../ai/textUtils';
 import type { AiItemEnrichment, ImportItemCandidate, ImportPipelineContext } from '../types';
 import type { LearningCorrection } from './types';
 
+const REASON = 'From your past correction';
+
 export function correctionsToEnrichments(
   candidates: ImportItemCandidate[],
   correctionsByNormalizedText: Map<string, LearningCorrection>,
@@ -24,7 +26,7 @@ export function correctionsToEnrichments(
     const enrichment: AiItemEnrichment = { candidateId: candidate.id };
 
     if (correction.normalizedName) {
-      enrichment.name = { value: correction.normalizedName, confidence: 'high', reason: 'From your past correction' };
+      enrichment.name = { value: correction.normalizedName, confidence: 'high', reason: REASON };
     }
 
     if (correction.categoryId) {
@@ -36,17 +38,17 @@ export function correctionsToEnrichments(
         enrichment.category = {
           value: { id: category.id, name: category.name },
           confidence: 'high',
-          reason: 'From your past correction',
+          reason: REASON,
         };
       }
     }
 
     if (correction.unit) {
-      enrichment.unit = { value: correction.unit, confidence: 'high', reason: 'From your past correction' };
+      enrichment.unit = { value: correction.unit, confidence: 'high', reason: REASON };
     }
 
     if (correction.quantity !== undefined) {
-      enrichment.quantity = { value: correction.quantity, confidence: 'high', reason: 'From your past correction' };
+      enrichment.quantity = { value: correction.quantity, confidence: 'high', reason: REASON };
     }
 
     enrichments.push(enrichment);

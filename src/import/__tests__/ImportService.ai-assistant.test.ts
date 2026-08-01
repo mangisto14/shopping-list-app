@@ -26,12 +26,12 @@ function mockAiAssistantProvider(enrich: ReturnType<typeof vi.fn>) {
   }));
 }
 
-function mockLearningRepository(lookupResult: Map<string, unknown>, saveCorrection = vi.fn()) {
+function mockLearningRepository(lookupResult: Map<string, unknown>, saveCorrections = vi.fn()) {
   const lookupMany = vi.fn().mockResolvedValue(lookupResult);
   vi.doMock('../learning/LearningRepository', () => ({
-    learningRepository: { lookupMany, saveCorrection },
+    learningRepository: { lookupMany, saveCorrections },
   }));
-  return { lookupMany, saveCorrection };
+  return { lookupMany, saveCorrections };
 }
 
 describe('importService.runImport - Learning Lookup + AI Assistant (Phase 2C)', () => {
