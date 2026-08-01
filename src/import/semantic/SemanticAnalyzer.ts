@@ -19,13 +19,8 @@
 // and the knowledge base (a static, in-memory lookup, loaded once).
 import type { AiItemEnrichment, ConfidenceLevel, ImportItemCandidate, ImportPipelineContext } from '../types';
 import { matchProduct, type ProductMatchTier } from '../knowledge/KnowledgeMatcher';
+import { resolveCategoryId } from '../shared/resolveCategoryId';
 import { parseQuantity } from './parseQuantity';
-
-function resolveCategoryId(categoryName: string | null, context: ImportPipelineContext): string | null {
-  if (!categoryName) return null;
-  const match = context.existingCategories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
-  return match?.id ?? null;
-}
 
 // Whether - and at what confidence - a resolved canonical name should
 // replace `candidate.name`. Deliberately keyed off the match TIER, not

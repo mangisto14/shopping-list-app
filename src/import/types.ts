@@ -86,9 +86,18 @@ export interface Extractor {
 // passed down the pipeline. Neither Normalizer nor Validator is a
 // hook, so they can't call useCategories/useItems themselves - this
 // is how they get the same data without needing to be hooks.
+//
+// `userId`/`language` (Phase 2C) are optional and additive: the
+// Learning Lookup and AI Assistant stages need them, but every earlier
+// stage (Normalizer/Validator/SemanticAnalysis) does not, and a caller
+// that omits them simply gets those two stages skipped rather than an
+// error - the same "missing capability degrades gracefully" discipline
+// this pipeline already uses for an absent/unavailable AI engine.
 export interface ImportPipelineContext {
   existingCategories: { id: string; name: string }[];
   existingItemNames: string[];
+  userId?: string;
+  language?: string;
 }
 
 export interface NormalizedItemCandidate {
@@ -193,25 +202,11 @@ export interface AiItemEnrichment {
   duplicateOfCandidateId?: string | null;
 }
 
-export interface AiAnalysisResult {
-  engineId: string;
-  enrichments: AiItemEnrichment[];
-  warnings: string[];
-}
-
-// The AI Analysis stage's contract. Provider-agnostic BY
-// CONSTRUCTION, same discipline as `Normalizer`: nothing here
-// references Claude, OpenAI, Gemini, Ollama, Azure OpenAI, or any
-// other vendor/model. Phase 2's only implementation
-// (HeuristicTextUnderstandingEngine) makes no network call at all - a
-// future vendor-backed implementation satisfies this exact same
-// interface and is swapped in via registration; the UI and
-// ImportService never reference a concrete engine.
-export interface TextUnderstandingEngine {
-  id: string; // e.g. 'heuristic' - deliberately never a vendor name
-  isAvailable(): boolean | Promise<boolean>;
-  analyze(candidates: ImportItemCandidate[], context: ImportPipelineContext): Promise<AiAnalysisResult>;
-}
+// Phase 2's TextUnderstandingEngine/AiAnalysisResult interfaces
+// (the "AI Analysis" stage) were retired in Phase 2C - see
+// src/import/ai-assistant/types.ts's AiAssistantProvider, which
+// replaces it with a real, provider-agnostic AI stage backed by a
+// Supabase Edge Function.
 
 // What a Validator itself produces - just the candidates (in their
 // final, Preview-editable shape) and any issues found. It has no
@@ -231,10 +226,14 @@ export interface ValidatedImportResult extends ValidationOutput {
   // tied to any one candidate row, unlike ValidationIssue - kept
   // separate rather than forcing a fake candidateId onto them.
   extractionWarnings: string[];
-  // Absent when no AI engine was available/registered, or it failed -
-  // the pipeline falls back to Validator's output untouched in either
-  // case (see ImportService.runImport), so this being unset is a
-  // normal, fully-supported state, not an error.
+  // Since Phase 2C, this is the AI ASSISTANT provider's id (e.g.
+  // 'claude') when it actually ran - see ai-assistant/types.ts. Absent
+  // when there were no unresolved items left to send it (including
+  // "Learning Lookup resolved everything, AI was skipped entirely"),
+  // when no provider is registered, or when the call failed - the
+  // pipeline falls back to whatever it already had in every case (see
+  // ImportService.runImport), so this being unset is a normal,
+  // fully-supported state, not an error.
   aiEngineId?: string;
   aiWarnings?: string[];
 }
@@ -262,4 +261,15 @@ export interface ImportService {
     seed?: RawImportInput
   ): Promise<ValidatedImportResult>;
   commit(result: ValidatedImportResult, addItem: AddItemFn): Promise<{ committed: number; failed: number }>;
+  // Phase 2C: diffs the pipeline's original output (`originalCandidates`
+  // - i.e. `runImport`'s own `result.candidates`, before any user edit)
+  // against what the user actually confirmed (`editedCandidates`), and
+  // persists ONLY the fields that genuinely changed as a learning
+  // correction (STEP5: "Never store unchanged values"). A no-op when
+  // `context.userId` is absent, or when a given row has no diff at all.
+  saveLearning(
+    originalCandidates: ImportItemCandidate[],
+    editedCandidates: ImportItemCandidate[],
+    context: ImportPipelineContext
+  ): Promise<void>;
 }
