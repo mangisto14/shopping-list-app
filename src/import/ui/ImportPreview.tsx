@@ -18,6 +18,9 @@ interface ImportPreviewProps {
 
 export default function ImportPreview({ result, categories, onConfirm, onCancel, submitting }: ImportPreviewProps) {
   const [candidates, setCandidates] = useState<ImportItemCandidate[]>(result.candidates);
+  // Only one row may be expanded at a time - selecting another one
+  // collapses whichever was open, per the approved design.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const warningByCandidateId = useMemo(() => {
     const map = new Map<string, string>();
@@ -89,6 +92,8 @@ export default function ImportPreview({ result, categories, onConfirm, onCancel,
               categories={categories}
               warning={warningByCandidateId.get(candidate.id)}
               duplicateOfName={duplicateTarget?.name}
+              expanded={expandedId === candidate.id}
+              onToggleExpand={() => setExpandedId((prev) => (prev === candidate.id ? null : candidate.id))}
               onChange={(patch) => updateCandidate(candidate.id, patch)}
               onMergeIntoDuplicate={
                 duplicateTargetId ? () => mergeIntoDuplicate(candidate.id, duplicateTargetId) : undefined
