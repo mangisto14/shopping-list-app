@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - "supabase/migrations/**"
+      - "supabase/functions/**"
       - ".github/workflows/supabase-migrations.yml"
   push:
     branches:
@@ -15,6 +16,7 @@ on:
       - claude/shopping-list-dev-supabase-i9lzi1
     paths:
       - "supabase/migrations/**"
+      - "supabase/functions/**"
       - ".github/workflows/supabase-migrations.yml"
 
 # Avoid two migration runs applying concurrently if pushes land close
@@ -246,3 +248,87 @@ jobs:
           done
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**db push:** ${{ steps.push.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+
+  # Deploys supabase/functions/import-ai-assistant (Phase 2C) to the
+  # production project. Deliberately does NOT set ANTHROPIC_API_KEY -
+  # that's a one-time secret provisioned directly against the Supabase
+  # project (`supabase secrets set ANTHROPIC_API_KEY=... --project-ref
+  # ...`), never stored as a GitHub Actions secret or touched by CI, so
+  # it can never leak into a workflow log. Until it's set, the deployed
+  # function responds with a clear 500 rather than silently doing
+  # nothing (see index.ts's own check) - deploying the function code
+  # and provisioning its secret are intentionally independent steps.
+  deploy-functions-production:
+    name: Deploy Edge Functions (production)
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link Supabase project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Deploy import-ai-assistant
+        id: deploy
+        run: supabase functions deploy import-ai-assistant --project-ref "$SUPABASE_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+      - name: Function deploy summary
+        if: always()
+        run: |
+          echo "## Supabase Edge Function Deploy (production)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**import-ai-assistant deploy:** ${{ steps.deploy.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+
+  # develop-branch / dev-project counterpart, same reasoning as
+  # deploy-development above - never touches the production project.
+  deploy-functions-development:
+    name: Deploy Edge Functions (development)
+    runs-on: ubuntu-latest
+    needs: validate
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/develop' ||
+       github.ref == 'refs/heads/claude/shopping-list-dev-supabase-i9lzi1')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link Supabase project (development)
+        run: supabase link --project-ref "$SUPABASE_DEV_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DEV_PROJECT_ID: ${{ secrets.SUPABASE_DEV_PROJECT_ID }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DEV_DB_PASSWORD }}
+
+      - name: Deploy import-ai-assistant
+        id: deploy
+        run: supabase functions deploy import-ai-assistant --project-ref "$SUPABASE_DEV_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DEV_PROJECT_ID: ${{ secrets.SUPABASE_DEV_PROJECT_ID }}
+
+      - name: Function deploy summary
+        if: always()
+        run: |
+          echo "## Supabase Edge Function Deploy (development)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**import-ai-assistant deploy:** ${{ steps.deploy.outcome }}" >> "$GITHUB_STEP_SUMMARY"

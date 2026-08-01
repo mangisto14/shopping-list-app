@@ -2,3 +2,11 @@ project_id = "shopping-list-app"
 
 [db]
 major_version = 15
+
+# Smart Import (Phase 2C): explicit even though `true` is already the
+# CLI default - so a caller must be an authenticated user (a valid
+# Supabase session JWT) before this function ever runs. See index.ts's
+# own explicit Authorization-header check for why this isn't relied on
+# as the only gate.
+[functions.import-ai-assistant]
+verify_jwt = true
