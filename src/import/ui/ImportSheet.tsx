@@ -7,6 +7,15 @@
 // This component only ever imports from '../index' (the module's
 // public barrel) and '../types' - never a concrete source/extractor/
 // normalizer file. It doesn't know or care which one ran.
+//
+// Candidate state (and the merge action) lives here, not in
+// ImportPreview, specifically so the bottom action bar can be passed
+// to BottomSheet's `footer` slot - structurally pinned outside the
+// scrollable body. BottomSheet's own header comment explains why: CSS
+// `sticky` inside a variable-height flex column is unreliable on
+// mobile browsers (iOS Safari in particular), so this reuses the
+// mechanism the shared component already built for exactly this case,
+// rather than reinventing pinning with `sticky`.
 import { useEffect, useState } from 'react';
 import BottomSheet from '../../components/ui/BottomSheet';
 import { useCategories } from '../../hooks/useCategories';
@@ -33,6 +42,8 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
   );
   const [pasteText, setPasteText] = useState('');
   const [result, setResult] = useState<ValidatedImportResult | null>(null);
+  const [candidates, setCandidates] = useState<ImportItemCandidate[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -42,6 +53,8 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
       setStep('source');
       setPasteText('');
       setResult(null);
+      setCandidates([]);
+      setExpandedId(null);
       setError('');
       return;
     }
@@ -71,6 +84,7 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
         { kind: 'text', text: pasteText }
       );
       setResult(validated);
+      setCandidates(validated.candidates);
       setStep('preview');
     } catch (err) {
       console.error('Smart Import: analyze failed', err);
@@ -81,7 +95,28 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
     }
   };
 
-  const handleConfirm = async (candidates: ImportItemCandidate[]) => {
+  const updateCandidate = (id: string, patch: Partial<ImportItemCandidate>) => {
+    setCandidates((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  };
+
+  // AI Analysis only ever suggests a merge - it never merges
+  // automatically. This is the one explicit user action that performs
+  // it: fold the duplicate's quantity into the row it matched, then
+  // exclude the duplicate rather than deleting it outright (still
+  // visible, still re-includable, nothing is silently lost).
+  const mergeIntoDuplicate = (duplicateId: string, targetId: string) => {
+    setCandidates((prev) => {
+      const duplicate = prev.find((c) => c.id === duplicateId);
+      if (!duplicate) return prev;
+      return prev.map((c) => {
+        if (c.id === targetId) return { ...c, quantity: c.quantity + duplicate.quantity };
+        if (c.id === duplicateId) return { ...c, included: false, aiDuplicateOfCandidateId: null };
+        return c;
+      });
+    });
+  };
+
+  const handleConfirm = async () => {
     if (!result) return;
     setSubmitting(true);
     try {
@@ -92,8 +127,34 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
     }
   };
 
+  const includedCount = candidates.filter((c) => c.included).length;
+
   return (
-    <BottomSheet open={open} onClose={onClose} title="ייבוא חכם">
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="ייבוא חכם"
+      footer={
+        step === 'preview' && result ? (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setStep('source')}
+              disabled={submitting}
+              className="flex-1 rounded-xl py-2.5 text-sm font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all disabled:opacity-60"
+            >
+              ביטול
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={submitting || includedCount === 0}
+              className="flex-1 rounded-xl py-2.5 text-sm font-semibold bg-blue-600 text-white shadow-[0_6px_14px_rgba(37,99,235,0.35)] hover:shadow-md active:scale-[0.99] transition-all disabled:opacity-50"
+            >
+              {submitting ? 'מוסיף...' : `הוספת ${includedCount} פריטים`}
+            </button>
+          </div>
+        ) : undefined
+      }
+    >
       {step === 'source' ? (
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-2.5">
@@ -151,10 +212,12 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
       ) : result ? (
         <ImportPreview
           result={result}
+          candidates={candidates}
           categories={categories}
-          onConfirm={handleConfirm}
-          onCancel={() => setStep('source')}
-          submitting={submitting}
+          expandedId={expandedId}
+          onToggleExpand={(id) => setExpandedId((prev) => (prev === id ? null : id))}
+          onUpdateCandidate={updateCandidate}
+          onMergeIntoDuplicate={mergeIntoDuplicate}
         />
       ) : null}
     </BottomSheet>

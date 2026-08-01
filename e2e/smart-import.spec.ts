@@ -86,9 +86,22 @@ test.describe('Smart Import (Phase 1)', () => {
     await page.locator('textarea').fill('חלב\nעגבניה\nעגבניות');
     await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
 
-    await expect(page.locator('input[placeholder="שם הפריט"]')).toHaveCount(3);
-    await expect(page.getByText('מוצרי חלב')).toBeVisible();
-    await expect(page.locator('[title="הצעת AI - כדאי לבדוק"]')).toHaveCount(1);
+    // Compact rows show the category right away (already auto-applied,
+    // medium confidence) without needing to expand anything.
+    const dairyRowHeader = page.getByRole('button', { name: /^כלול פריט זה בייבוא חלב/ });
+    await expect(dairyRowHeader).toContainText('מוצרי חלב');
+
+    // Expanding the row reveals the per-field AI indicator with a
+    // confidence emoji (never numeric confidence).
+    await dairyRowHeader.click();
+    await expect(page.getByText('🟡 קטגוריה שויכה')).toBeVisible();
+
+    // Collapsing it and expanding the duplicate-flagged row instead
+    // (only one row may be expanded at a time) surfaces the merge
+    // suggestion - a suggestion only, applied solely via this explicit tap.
+    await dairyRowHeader.click();
+    const duplicateRowHeader = page.getByRole('button', { name: /^כלול פריט זה בייבוא עגבניות/ });
+    await duplicateRowHeader.click();
 
     const mergeBanner = page.getByText(/דומה ל/);
     await expect(mergeBanner).toBeVisible();

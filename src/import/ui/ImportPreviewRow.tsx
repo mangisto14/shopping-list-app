@@ -165,12 +165,18 @@ export default function ImportPreviewRow({
 
       {/* Expanded editor. CSS grid-rows (0fr -> 1fr) animates smoothly
           to the content's natural height with no JS measurement -
-          well-supported in iPhone Safari / Android Chrome. */}
+          well-supported in iPhone Safari / Android Chrome. The
+          content stays mounted while collapsed (required for the
+          height to animate at all), so `inert` is essential here, not
+          optional: without it, every row's hidden inputs/buttons would
+          still be reachable by Tab and exposed to screen readers even
+          though they're visually clipped to zero height. */}
       <div
         className="grid transition-[grid-template-rows] duration-200 ease-out"
         style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
       >
-        <div className="overflow-hidden">
+        {/* @ts-expect-error - `inert` is a valid DOM boolean attribute; @types/react@18 doesn't type it yet (added upstream for React 19) */}
+        <div className="overflow-hidden" inert={!expanded ? '' : undefined}>
           <div className="px-3 pb-3 pt-2 border-t border-gray-100 flex flex-col gap-2">
             <div className="flex items-center gap-1.5">
               <input
