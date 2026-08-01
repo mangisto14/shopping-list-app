@@ -54,8 +54,10 @@ test.describe('Smart Import (Phase 1)', () => {
     await page.locator('textarea').fill('חלב\nלחם');
     await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
 
-    // Preview renders both parsed rows, each independently editable.
-    await expect(page.locator('input[placeholder="שם הפריט"]')).toHaveCount(2);
+    // Preview renders both parsed rows, compact by default (Phase 2A) -
+    // both are still included and confirmable without expanding either.
+    await expect(page.getByRole('button', { name: /^כלול פריט זה בייבוא חלב/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^כלול פריט זה בייבוא לחם/ })).toBeVisible();
 
     await page.getByRole('button', { name: /הוספת \d+ פריטים/ }).click();
 
@@ -107,5 +109,89 @@ test.describe('Smart Import (Phase 1)', () => {
     await expect(mergeBanner).toBeVisible();
     await page.getByRole('button', { name: 'מיזוג' }).click();
     await expect(mergeBanner).toHaveCount(0);
+  });
+
+  test('rows are compact by default: collapsed content is genuinely non-interactive, not just visually hidden', async ({
+    page,
+  }) => {
+    await seedAuthSession(page);
+    await enableExperimentalFeatures(page);
+    await mockListData(page, { listName: 'הרשימה שלי', ownerId: USER_ID });
+
+    await page.goto('/lists');
+    await page.getByRole('button', { name: 'ייבוא חכם' }).click();
+    await page.locator('textarea').fill('חלב\nלחם');
+    await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
+
+    await expect(page.getByText('🤖 ניתוח AI הושלם')).toBeVisible();
+
+    // The expanded editor stays mounted while collapsed (the CSS
+    // grid-rows technique animating 0fr -> 1fr needs real content to
+    // animate to), marked `inert` rather than removed. Two things
+    // prove this is genuinely non-interactive, not just visually
+    // clipped: the wrapping grid track's own height is exactly 0 (real
+    // layout collapse, not just an overflow clip an inspector could
+    // miss), and the browser itself refuses to focus an inert
+    // descendant even when asked to directly.
+    const gridWrapper = page.locator('.grid').first();
+    expect((await gridWrapper.boundingBox())?.height).toBe(0);
+
+    const firstNameInput = page.locator('input[placeholder="שם הפריט"]').first();
+    await firstNameInput.evaluate((el) => (el as HTMLInputElement).focus());
+    expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('INPUT');
+
+    const milkRow = page.getByRole('button', { name: /^כלול פריט זה בייבוא חלב/ });
+    const breadRow = page.getByRole('button', { name: /^כלול פריט זה בייבוא לחם/ });
+
+    // Expanding "חלב" grows its row's grid track to a real height and
+    // makes its name field genuinely focusable.
+    await milkRow.click();
+    await expect(async () => {
+      expect((await gridWrapper.boundingBox())?.height).toBeGreaterThan(0);
+    }).toPass();
+    await firstNameInput.evaluate((el) => (el as HTMLInputElement).focus());
+    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('INPUT');
+
+    // Expanding "לחם" without first collapsing "חלב" auto-collapses it
+    // (only one row may be expanded at a time) - back to non-focusable.
+    await breadRow.click();
+    await firstNameInput.evaluate((el) => (el as HTMLInputElement).focus());
+    expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('INPUT');
+  });
+
+  test('AI summary and the bottom action bar stay in place while a long item list scrolls', async ({ page }) => {
+    await seedAuthSession(page);
+    await enableExperimentalFeatures(page);
+    await mockListData(page, { listName: 'הרשימה שלי', ownerId: USER_ID });
+
+    await page.goto('/lists');
+    await page.getByRole('button', { name: 'ייבוא חכם' }).click();
+
+    const manyItems = Array.from({ length: 30 }, (_, i) => `פריט מספר ${i + 1}`).join('\n');
+    await page.locator('textarea').fill(manyItems);
+    await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
+
+    const summary = page.getByText(/פריטים זוהו/).first();
+    const confirmButton = page.getByRole('button', { name: /הוספת \d+ פריטים/ });
+    await expect(summary).toBeVisible();
+    await expect(confirmButton).toBeVisible();
+
+    const summaryBoxBefore = await summary.boundingBox();
+    const confirmBoxBefore = await confirmButton.boundingBox();
+
+    // Scroll the sheet - the row list is what should move, not the
+    // summary or the action bar.
+    await page.locator('[data-testid="bottom-sheet"]').evaluate((el) => {
+      const scrollable = el.querySelector('.overflow-y-auto');
+      scrollable?.scrollBy(0, 400);
+    });
+
+    await expect(summary).toBeVisible();
+    await expect(confirmButton).toBeVisible();
+    const summaryBoxAfter = await summary.boundingBox();
+    const confirmBoxAfter = await confirmButton.boundingBox();
+
+    expect(summaryBoxAfter?.y).toBeCloseTo(summaryBoxBefore?.y ?? 0, 0);
+    expect(confirmBoxAfter?.y).toBeCloseTo(confirmBoxBefore?.y ?? 0, 0);
   });
 });

@@ -4,7 +4,13 @@
 // that file) so the bottom action bar can live in BottomSheet's
 // `footer` slot - structurally pinned outside the scrollable body,
 // per that component's own documented reasoning against CSS `sticky`
-// inside a variable-height flex column on mobile browsers.
+// inside a variable-height flex column on mobile browsers. That
+// warning is specifically about a *bottom*-pinned element fighting
+// the on-screen keyboard's viewport resize - the AI summary here is
+// *top*-pinned (`sticky top-0`) inside BottomSheet's own scrolling
+// body, which has none of that keyboard-interaction risk and is a
+// well-supported, common pattern, so it's used directly rather than
+// needing its own structural slot.
 import { useMemo } from 'react';
 import type { Category } from '../../hooks/useCategories';
 import type { ImportItemCandidate, ValidatedImportResult } from '../types';
@@ -46,13 +52,18 @@ export default function ImportPreview({
 
   return (
     <div className="flex flex-col gap-3">
-      {result.extractionWarnings.length > 0 && (
-        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs font-medium text-amber-700">
-          {result.extractionWarnings.join(' · ')}
-        </div>
-      )}
+      {/* Sticky to the top of BottomSheet's own scrolling body - stays
+          in place while only the row list beneath it scrolls. `bg-white`
+          is required so scrolled-past rows don't show through underneath. */}
+      <div className="sticky top-0 z-10 bg-white pb-2 flex flex-col gap-2">
+        {result.extractionWarnings.length > 0 && (
+          <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs font-medium text-amber-700">
+            {result.extractionWarnings.join(' · ')}
+          </div>
+        )}
 
-      <ImportAiSummary candidates={candidates} aiEngineId={result.aiEngineId} />
+        <ImportAiSummary candidates={candidates} aiEngineId={result.aiEngineId} />
+      </div>
 
       <div className="flex flex-col gap-2">
         {candidates.map((candidate) => {
