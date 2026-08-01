@@ -459,6 +459,89 @@ Both this stage and the AI Analysis stage below it are wrapped in their own try/
 
 TypeScript, production build, lint, all 88 Vitest unit tests, and the full Playwright e2e suite (including Phase 1/2/2A's pre-existing specs) all pass with this change. Two pre-existing unit test assertions were updated (not reverted) because the new behavior they exercise is legitimately different and spec-required: `"2x milk\nbread"` now canonicalizes to `["חלב", "לחם"]` (Semantic Analysis's job), and a failing AI engine no longer implies untouched `aiSuggestions` (Semantic Analysis is an independent stage that still ran).
 
+## Phase 2C (implemented): real AI Assistant + User Learning
+
+The first real AI/vendor integration in Smart Import - everything before this phase (Semantic Analysis, the retired Heuristic engine) was deliberately non-AI. The AI is an *assistant*, not the primary parser: Rule-Based Normalizer + Semantic Analysis still run first and resolve the large majority of items on their own; the AI Assistant only ever sees what's left unresolved.
+
+### Architecture
+
+```
+React App -> ImportService -> Supabase Edge Function -> Claude API
+                                     -> Structured JSON -> Preview
+```
+
+The client **never** calls Claude directly, and `ANTHROPIC_API_KEY` **never** exists anywhere in the frontend bundle - only in the Edge Function's own environment (a Supabase secret, provisioned once outside CI - see "Deployment" below).
+
+### Pipeline
+
+```
+Source -> Extractor -> Rule-Based Normalizer -> Validator ->
+Semantic Analysis -> Local Batch Heuristics -> User Learning Lookup ->
+AI Assistant (unresolved items only) -> Preview -> User edits ->
+Save Learning
+```
+
+Inserted into `ImportService.runImport()` in this exact order, right after Semantic Analysis:
+
+1. **Local Batch Heuristics** (`src/import/local/BatchHeuristics.ts`) - ambiguous-name flagging and within-batch duplicate detection, extracted **verbatim** from the retired Heuristic engine. Always runs, no network - these two checks were never really "AI" (no vendor, no model), and the Phase 2C AI response schema doesn't include either field, so they keep running independently of Learning/AI Assistant rather than being folded into either.
+2. **User Learning Lookup** (`src/import/learning/`) - a single batched query (`.in('original_text', [...])`) against `user_import_learning`, keyed by normalized text, with an in-memory cache so a repeated phrase within one session never re-queries. A hit is applied at **high** confidence (it's the user's own explicit past correction) and - critically - marks that candidate as "skip AI" **unconditionally**, even if the correction only ever addressed one field (e.g. category) and left another (e.g. unit) untouched. Re-sending an item to AI just because one other field is still empty would defeat the entire point of having learned from it once already.
+3. **AI Assistant** (`src/import/ai-assistant/`) - only candidates still unresolved after step 2, batched into **one** request (never one call per item). "Unresolved" (`isUnresolved.ts`) means: no category, no unit, flagged ambiguous, or carrying any low-confidence pending suggestion - matching the spec's own listed examples. "Missing quantity" is deliberately not modeled as its own signal: Normalizer + Semantic Analysis always resolve a valid quantity (defaulting to 1), so there's no honest "unknown quantity" state distinct from "quantity 1" to detect.
+
+Every one of these four stages (including AI Assistant) is wrapped in its own try/catch and merges via the **exact same `applyAiEnrichments()`** function Phase 2 established - so results from Learning and the AI Assistant appear in Preview through the same badges/pending-suggestion UI with **zero Preview code changes**, and a failure at any stage just means the pipeline falls back to whatever it already had, never blocking the import.
+
+### Provider-agnostic on both sides of the network boundary
+
+Two independent interfaces, split exactly at the client/server boundary the security requirement creates:
+
+- **Client-side** (`src/import/ai-assistant/types.ts`): `AiAssistantProvider` - `ImportService` only ever knows it's calling "the AI Assistant provider". `SupabaseEdgeFunctionAiProvider` (the only implementation) calls `supabase.functions.invoke('import-ai-assistant', ...)` - no vendor name appears anywhere client-side.
+- **Server-side** (`supabase/functions/import-ai-assistant/providers/AiProvider.ts`, Deno): a second `AiProvider` interface - `ClaudeProvider` is the only implementation today. Swapping Claude for OpenAI/Gemini means adding one new provider file server-side and changing which one `index.ts` registers - **zero changes to `index.ts`'s request handling, `ImportService`, or the frontend**.
+
+### The Edge Function (`supabase/functions/import-ai-assistant/`)
+
+- **Authenticates**: relies on Supabase's platform-level JWT verification (`verify_jwt = true` in `config.toml`, explicit rather than left to the CLI default) plus an explicit in-function check that a request has an `Authorization` header at all.
+- **Validates the payload** (`schema.ts`'s `isValidAiAssistantRequest`): language, an exact category list, 1-50 well-formed unresolved items.
+- **Builds the prompt** (`prompt.ts`): system prompt includes the *exact* category list ("never invent a new one") and instructs the model to respond only via a forced tool call.
+- **Calls Claude via tool-forcing**, not a text reply parsed as JSON - `tool_choice: { type: 'tool', name: 'submit_import_analysis' }` on the Anthropic Messages API is what actually *guarantees* structured output, rather than merely requesting it in a prompt.
+- **Re-validates every returned field** (`schema.ts`'s `sanitizeSuggestion`) against what was actually sent in the request: an unknown `candidateId`, a category not in the exact list, a missing/invalid confidence level (never numeric), or a wrong value type are all silently dropped rather than trusted. This is what "the AI must never invent unsupported fields" means in code, not just in the prompt.
+- **Never returns free text** - every response (success or failure) is JSON, including errors.
+
+Deliberately kept **stateless** - no database access. `user_import_learning` reads/writes stay entirely client-side (RLS already scopes them per-user), which keeps the function's blast radius to exactly one job: talk to the AI provider and validate its output.
+
+### Confidence rule (unchanged, reused)
+
+| Source | Confidence | Why |
+|---|---|---|
+| Quantity/unit parsed directly from the raw text (Semantic Analysis) | High | Not a guess - it's what the user actually typed. |
+| A learned correction (User Learning) | High | The user's own explicit, past decision. |
+| AI Assistant's canonical-name / alias-tier rename | High or Low (per the model's own confidence) | Re-validated, never trusted blindly. |
+| Category, from any source | Never High | A category is a judgment call - see Phase 2B's own reasoning, unchanged and still followed here. |
+
+### Database: `user_import_learning`
+
+`id, user_id, original_text (normalized), normalized_name, category_id, unit, quantity, updated_at`, unique on `(user_id, original_text)`, RLS scoped to `auth.uid() = user_id` (same pattern as the existing `history` table). `quantity` is an addition beyond the spec's own "suggested fields" list - STEP5 explicitly requires learning from quantity corrections too, which the suggested schema didn't have a column for.
+
+Stores **only** corrections the user actually made - `ImportService.saveLearning()` diffs the pipeline's pre-edit output against what the user confirmed and writes only the fields that differ; a row the user accepted as-is is never written.
+
+### Deployment
+
+`ANTHROPIC_API_KEY` must be provisioned **manually**, once, directly against each Supabase project (`supabase secrets set ANTHROPIC_API_KEY=... --project-ref ...`) - deliberately never touched by CI or stored as a GitHub Actions secret, so it can never leak into a workflow log. Until it's set, the deployed function responds with a clear `500` rather than silently doing nothing. `.github/workflows/supabase-migrations.yml` now also deploys `supabase/functions/import-ai-assistant` to the production/dev projects alongside migrations, on the same trigger paths.
+
+### Retired in this phase
+
+`HeuristicTextUnderstandingEngine`, `registerAiEngines.ts`, `commonUnits.ts`, and the `TextUnderstandingEngine`/`AiAnalysisResult` interfaces - their category/unit/name guessing was strictly redundant with Semantic Analysis's knowledge-base lookup (a genuine improvement over word-token overlap and a 17-keyword table). Only the two checks that were never really "AI" (ambiguous-flagging, duplicate-detection) survive, relocated to `local/BatchHeuristics.ts`.
+
+### Tests
+
+- `supabase/functions/import-ai-assistant/__tests__/`: `schema.test.ts` (15), `ClaudeProvider.test.ts` (5), `index.test.ts` (8) - request handling, validation, and the Claude provider are all Deno-API-free by construction, so they run directly under the app's existing Vitest setup.
+- `src/import/learning/__tests__/LearningRepository.test.ts` (7) - batching, caching (both hits and misses), upsert shape.
+- `src/import/local/__tests__/BatchHeuristics.test.ts` (7) - ported from the retired engine's own tests.
+- `src/import/__tests__/ImportService.ai-assistant.test.ts` (7) - the exact STEP9 scenarios: learning hit skips AI, learning miss calls AI batched, provider timeout/Edge-Function-failure/no-provider-registered all fail safely, successful enrichment merges correctly.
+- `e2e/smart-import-ai-assistant.spec.ts` (3) - the full 3-import "קישוא" flow through the real UI: AI resolves it and the user accepts as-is (nothing saved); the user corrects the AI's suggestion (correction saved, with the right `category_id`); a later import of the same text resolves from the learning table alone, with the AI Assistant **never called** (asserted directly against the mocked route).
+
+### Validation
+
+TypeScript, production build, lint, all 125 Vitest unit/integration tests, and the full Playwright e2e suite (all pre-existing specs, unchanged, plus the 3 new ones) all pass. `e2e/fixtures.ts`'s `mockListData()` now also mocks `user_import_learning` and the `import-ai-assistant` function (defaulted to "no saved corrections" / "call succeeds with no suggestions"), so every pre-existing Smart Import test keeps observing the same `aiEngineId`-gated summary UI as before the AI stage was replaced, without any of those tests needing to know either endpoint exists.
+
 ## Future enhancement (not part of Phase 1): optional AI Review stage
 
 **Not implemented. Not scheduled. This section exists only to confirm the Phase 1 architecture reserves room for it, so adding it later doesn't force a redesign.**
