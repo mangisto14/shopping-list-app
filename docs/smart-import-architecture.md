@@ -366,6 +366,19 @@ An absent, unavailable, or throwing AI engine is a normal, fully-supported outco
 
 `ImportSheet` gets a dedicated "analyzing" step (spinner + "מנתח את רשימת הקניות שלך...") shown while `runImport` (now including the AI stage) is in flight, replacing what was previously just a disabled button label.
 
+## Phase 2A (implemented): compact review UI, then a single shared editor
+
+Phase 2A first redesigned `ImportPreviewRow` into a compact row (~64px) with an inline expandable editor per row - collapsed rows stayed mounted (`inert`) so the CSS `grid-template-rows` transition had real content to animate to. A follow-up architecture pass replaced that per-row editor with **one shared `ImportItemEditor` instance**:
+
+- `ImportPreviewRow` renders the compact row only - no editor content, no per-row state, no `inert`/animation machinery.
+- `ImportPreview` holds `selectedCandidateId: string | null`. When set, it renders `ImportItemEditor` for that one candidate **in place of** the row list (not alongside it); when `null`, it renders the row list as before.
+- Selecting a row sets `selectedCandidateId`; the editor's close button clears it, returning to the compact list.
+- Saving a field calls the same `onUpdateCandidate` callback as before - editor and row list both ultimately funnel through `ImportSheet`'s single `candidates` state, unchanged from the prior commit.
+
+This is a real DOM-size reduction: previously an import of 30-50 items mounted 30-50 full editors (every input, every AI indicator, every button) simultaneously, all but one `inert`. Now at most one editor's worth of DOM exists at any time, regardless of list size - and any future AI feature that needs to hook into "the item currently being edited" (Phase 2B+) has exactly one call site to extend, not N.
+
+No change to `ImportService`, the pipeline, any provider, `useItems`/`useCategories`, or `ImportSheet`'s state-lifting/sticky-footer wiring from the previous pass - this is a pure Preview-UI restructuring.
+
 ## Future enhancement (not part of Phase 1): optional AI Review stage
 
 **Not implemented. Not scheduled. This section exists only to confirm the Phase 1 architecture reserves room for it, so adding it later doesn't force a redesign.**

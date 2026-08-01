@@ -89,21 +89,22 @@ test.describe('Smart Import (Phase 1)', () => {
     await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
 
     // Compact rows show the category right away (already auto-applied,
-    // medium confidence) without needing to expand anything.
-    const dairyRowHeader = page.getByRole('button', { name: /^כלול פריט זה בייבוא חלב/ });
-    await expect(dairyRowHeader).toContainText('מוצרי חלב');
+    // medium confidence) without needing to open anything.
+    const dairyRow = page.getByRole('button', { name: /^כלול פריט זה בייבוא חלב/ });
+    await expect(dairyRow).toContainText('מוצרי חלב');
 
-    // Expanding the row reveals the per-field AI indicator with a
-    // confidence emoji (never numeric confidence).
-    await dairyRowHeader.click();
+    // Selecting the row opens the single shared editor, which shows
+    // the per-field AI indicator with a confidence emoji (never
+    // numeric confidence).
+    await dairyRow.click();
     await expect(page.getByText('🟡 קטגוריה שויכה')).toBeVisible();
 
-    // Collapsing it and expanding the duplicate-flagged row instead
-    // (only one row may be expanded at a time) surfaces the merge
-    // suggestion - a suggestion only, applied solely via this explicit tap.
-    await dairyRowHeader.click();
-    const duplicateRowHeader = page.getByRole('button', { name: /^כלול פריט זה בייבוא עגבניות/ });
-    await duplicateRowHeader.click();
+    // Closing returns to the compact list; selecting the duplicate-
+    // flagged row instead surfaces the merge suggestion in that same
+    // single editor instance - a suggestion only, applied solely via
+    // this explicit tap.
+    await page.getByRole('button', { name: 'סגירה - חזרה לרשימה' }).click();
+    await page.getByRole('button', { name: /^כלול פריט זה בייבוא עגבניות/ }).click();
 
     const mergeBanner = page.getByText(/דומה ל/);
     await expect(mergeBanner).toBeVisible();
@@ -111,7 +112,7 @@ test.describe('Smart Import (Phase 1)', () => {
     await expect(mergeBanner).toHaveCount(0);
   });
 
-  test('rows are compact by default: collapsed content is genuinely non-interactive, not just visually hidden', async ({
+  test('a single shared editor instance opens per selected row and closes back to the compact list', async ({
     page,
   }) => {
     await seedAuthSession(page);
@@ -125,38 +126,31 @@ test.describe('Smart Import (Phase 1)', () => {
 
     await expect(page.getByText('🤖 ניתוח AI הושלם')).toBeVisible();
 
-    // The expanded editor stays mounted while collapsed (the CSS
-    // grid-rows technique animating 0fr -> 1fr needs real content to
-    // animate to), marked `inert` rather than removed. Two things
-    // prove this is genuinely non-interactive, not just visually
-    // clipped: the wrapping grid track's own height is exactly 0 (real
-    // layout collapse, not just an overflow clip an inspector could
-    // miss), and the browser itself refuses to focus an inert
-    // descendant even when asked to directly.
-    const gridWrapper = page.locator('.grid').first();
-    expect((await gridWrapper.boundingBox())?.height).toBe(0);
-
-    const firstNameInput = page.locator('input[placeholder="שם הפריט"]').first();
-    await firstNameInput.evaluate((el) => (el as HTMLInputElement).focus());
-    expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('INPUT');
+    // No editor is mounted at all until a row is selected - unlike the
+    // previous per-row (inert-when-collapsed) design, there is nothing
+    // to find here even with a plain CSS locator.
+    await expect(page.locator('input[placeholder="שם הפריט"]')).toHaveCount(0);
 
     const milkRow = page.getByRole('button', { name: /^כלול פריט זה בייבוא חלב/ });
     const breadRow = page.getByRole('button', { name: /^כלול פריט זה בייבוא לחם/ });
+    const nameInput = page.locator('input[placeholder="שם הפריט"]');
+    const closeButton = page.getByRole('button', { name: 'סגירה - חזרה לרשימה' });
 
-    // Expanding "חלב" grows its row's grid track to a real height and
-    // makes its name field genuinely focusable.
+    // Selecting "חלב" mounts exactly one editor, for that candidate.
     await milkRow.click();
-    await expect(async () => {
-      expect((await gridWrapper.boundingBox())?.height).toBeGreaterThan(0);
-    }).toPass();
-    await firstNameInput.evaluate((el) => (el as HTMLInputElement).focus());
-    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('INPUT');
+    await expect(nameInput).toHaveCount(1);
+    await expect(nameInput).toHaveValue('חלב');
+    await expect(milkRow).toHaveCount(0); // the list itself is replaced, not just covered
 
-    // Expanding "לחם" without first collapsing "חלב" auto-collapses it
-    // (only one row may be expanded at a time) - back to non-focusable.
+    // Closing returns to the compact list - editor unmounts entirely.
+    await closeButton.click();
+    await expect(page.locator('input[placeholder="שם הפריט"]')).toHaveCount(0);
+    await expect(milkRow).toBeVisible();
+
+    // Selecting "לחם" reuses the same single editor for the other item.
     await breadRow.click();
-    await firstNameInput.evaluate((el) => (el as HTMLInputElement).focus());
-    expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('INPUT');
+    await expect(nameInput).toHaveCount(1);
+    await expect(nameInput).toHaveValue('לחם');
   });
 
   test('AI summary and the bottom action bar stay in place while a long item list scrolls', async ({ page }) => {

@@ -1,28 +1,30 @@
 // src/import/ui/ImportPreview.tsx
-// Renders the scrollable body of the Preview step: the AI summary and
-// the row list. Candidate state itself is owned by ImportSheet (see
-// that file) so the bottom action bar can live in BottomSheet's
-// `footer` slot - structurally pinned outside the scrollable body,
-// per that component's own documented reasoning against CSS `sticky`
-// inside a variable-height flex column on mobile browsers. That
-// warning is specifically about a *bottom*-pinned element fighting
-// the on-screen keyboard's viewport resize - the AI summary here is
-// *top*-pinned (`sticky top-0`) inside BottomSheet's own scrolling
-// body, which has none of that keyboard-interaction risk and is a
-// well-supported, common pattern, so it's used directly rather than
-// needing its own structural slot.
+// Renders the Preview step's body: either the compact row list (with
+// the sticky AI summary above it), or - when a row is selected - the
+// single shared ImportItemEditor in its place. Candidate state itself
+// is owned by ImportSheet (see that file) so the bottom action bar
+// can live in BottomSheet's `footer` slot - structurally pinned
+// outside the scrollable body, per that component's own documented
+// reasoning against CSS `sticky` inside a variable-height flex column
+// on mobile browsers. That warning is specifically about a *bottom*-
+// pinned element fighting the on-screen keyboard's viewport resize -
+// the AI summary here is *top*-pinned (`sticky top-0`) inside
+// BottomSheet's own scrolling body, which has none of that keyboard-
+// interaction risk and is a well-supported, common pattern, so it's
+// used directly rather than needing its own structural slot.
 import { useMemo } from 'react';
 import type { Category } from '../../hooks/useCategories';
 import type { ImportItemCandidate, ValidatedImportResult } from '../types';
 import ImportPreviewRow from './ImportPreviewRow';
 import ImportAiSummary from './ImportAiSummary';
+import ImportItemEditor from './ImportItemEditor';
 
 interface ImportPreviewProps {
   result: ValidatedImportResult;
   candidates: ImportItemCandidate[];
   categories: Category[];
-  expandedId: string | null;
-  onToggleExpand: (id: string) => void;
+  selectedCandidateId: string | null;
+  onSelectCandidate: (id: string | null) => void;
   onUpdateCandidate: (id: string, patch: Partial<ImportItemCandidate>) => void;
   onMergeIntoDuplicate: (duplicateId: string, targetId: string) => void;
 }
@@ -31,8 +33,8 @@ export default function ImportPreview({
   result,
   candidates,
   categories,
-  expandedId,
-  onToggleExpand,
+  selectedCandidateId,
+  onSelectCandidate,
   onUpdateCandidate,
   onMergeIntoDuplicate,
 }: ImportPreviewProps) {
@@ -48,6 +50,28 @@ export default function ImportPreview({
 
   if (candidates.length === 0) {
     return <div className="text-center py-8 text-sm text-gray-500">לא זוהו פריטים. נסה/י טקסט אחר.</div>;
+  }
+
+  const selectedCandidate = selectedCandidateId ? candidateById.get(selectedCandidateId) ?? null : null;
+
+  // Exactly one ImportItemEditor instance is ever mounted, only while
+  // a row is selected - not one per row (see ImportPreviewRow.tsx).
+  if (selectedCandidate) {
+    const duplicateTargetId = selectedCandidate.aiDuplicateOfCandidateId;
+    const duplicateTarget = duplicateTargetId ? candidateById.get(duplicateTargetId) : undefined;
+    return (
+      <ImportItemEditor
+        candidate={selectedCandidate}
+        categories={categories}
+        warning={warningByCandidateId.get(selectedCandidate.id)}
+        duplicateOfName={duplicateTarget?.name}
+        onChange={(patch) => onUpdateCandidate(selectedCandidate.id, patch)}
+        onMergeIntoDuplicate={
+          duplicateTargetId ? () => onMergeIntoDuplicate(selectedCandidate.id, duplicateTargetId) : undefined
+        }
+        onClose={() => onSelectCandidate(null)}
+      />
+    );
   }
 
   return (
@@ -66,25 +90,14 @@ export default function ImportPreview({
       </div>
 
       <div className="flex flex-col gap-2">
-        {candidates.map((candidate) => {
-          const duplicateTargetId = candidate.aiDuplicateOfCandidateId;
-          const duplicateTarget = duplicateTargetId ? candidateById.get(duplicateTargetId) : undefined;
-          return (
-            <ImportPreviewRow
-              key={candidate.id}
-              candidate={candidate}
-              categories={categories}
-              warning={warningByCandidateId.get(candidate.id)}
-              duplicateOfName={duplicateTarget?.name}
-              expanded={expandedId === candidate.id}
-              onToggleExpand={() => onToggleExpand(candidate.id)}
-              onChange={(patch) => onUpdateCandidate(candidate.id, patch)}
-              onMergeIntoDuplicate={
-                duplicateTargetId ? () => onMergeIntoDuplicate(candidate.id, duplicateTargetId) : undefined
-              }
-            />
-          );
-        })}
+        {candidates.map((candidate) => (
+          <ImportPreviewRow
+            key={candidate.id}
+            candidate={candidate}
+            onChange={(patch) => onUpdateCandidate(candidate.id, patch)}
+            onSelect={() => onSelectCandidate(candidate.id)}
+          />
+        ))}
       </div>
     </div>
   );

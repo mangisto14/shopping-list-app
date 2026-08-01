@@ -43,7 +43,7 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
   const [pasteText, setPasteText] = useState('');
   const [result, setResult] = useState<ValidatedImportResult | null>(null);
   const [candidates, setCandidates] = useState<ImportItemCandidate[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -54,7 +54,7 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
       setPasteText('');
       setResult(null);
       setCandidates([]);
-      setExpandedId(null);
+      setSelectedCandidateId(null);
       setError('');
       return;
     }
@@ -214,8 +214,8 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
           result={result}
           candidates={candidates}
           categories={categories}
-          expandedId={expandedId}
-          onToggleExpand={(id) => setExpandedId((prev) => (prev === id ? null : id))}
+          selectedCandidateId={selectedCandidateId}
+          onSelectCandidate={setSelectedCandidateId}
           onUpdateCandidate={updateCandidate}
           onMergeIntoDuplicate={mergeIntoDuplicate}
         />
