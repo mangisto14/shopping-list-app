@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import type { Category } from '../../hooks/useCategories';
 import type { ImportItemCandidate, ValidatedImportResult } from '../types';
 import ImportPreviewRow from './ImportPreviewRow';
+import ImportAiSummary from './ImportAiSummary';
 
 interface ImportPreviewProps {
   result: ValidatedImportResult;
@@ -75,9 +76,7 @@ export default function ImportPreview({ result, categories, onConfirm, onCancel,
         </div>
       )}
 
-      <p className="text-xs font-semibold text-gray-500">
-        {candidates.length} פריטים זוהו · {includedCount} יתווספו לרשימה
-      </p>
+      <ImportAiSummary candidates={candidates} aiEngineId={result.aiEngineId} />
 
       <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto">
         {candidates.map((candidate) => {
