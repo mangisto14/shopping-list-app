@@ -19,6 +19,7 @@ import { ALL_NORMALIZERS, DEFAULT_NORMALIZER_ID } from './normalizers/registerNo
 import { ALL_VALIDATORS, DEFAULT_VALIDATOR_ID } from './validators/registerValidators';
 import { ALL_AI_ENGINES, DEFAULT_AI_ENGINE_ID } from './ai/registerAiEngines';
 import { applyAiEnrichments } from './ai/applyEnrichments';
+import { analyzeCandidates } from './semantic/SemanticAnalyzer';
 
 function getSource(id: ImportSourceId) {
   const source = ALL_SOURCES.find((s) => s.id === id);
@@ -87,20 +88,41 @@ export const importService: ImportServiceType = {
     const validator = getDefaultValidator();
     const { candidates, issues } = await validator.validate(normalized, context);
 
+    // Semantic Analysis (Phase 2B): a deterministic, non-AI knowledge-
+    // base lookup (see knowledge/ and semantic/parseQuantity.ts) - no
+    // network call, no vendor SDK. Strictly additive and fail-safe,
+    // same discipline as the AI Analysis stage below: a throw here
+    // must never block the import flow. Applied via the exact same
+    // applyAiEnrichments() merge function the AI Analysis stage uses,
+    // so its badges/pending-suggestion UI light up with zero Preview
+    // code changes.
+    let semanticCandidates = candidates;
+    try {
+      const semanticEnrichments = analyzeCandidates(candidates, context);
+      semanticCandidates = applyAiEnrichments(candidates, semanticEnrichments);
+    } catch (err) {
+      console.error('Smart Import: Semantic Analysis failed, continuing with rule-based output', err);
+    }
+
     // AI Analysis: strictly additive and fail-safe. An unavailable
     // engine, or one that throws, must never block the import flow -
-    // Validator's own output is already a complete, valid result on
+    // the pipeline's output so far is already complete and valid on
     // its own, so on any failure we just return it as-is rather than
     // retrying or surfacing an error to the user.
+    //
+    // Runs on `semanticCandidates`, not `candidates` - its own guards
+    // (`if (!candidate.unit)`, `if (!candidate.categoryId)`) naturally
+    // skip any field Semantic Analysis already resolved, so the two
+    // stages never fight over the same field.
     let aiEngineId: string | undefined;
     let aiWarnings: string[] | undefined;
-    let enrichedCandidates = candidates;
+    let enrichedCandidates = semanticCandidates;
 
     const engine = getAvailableAiEngine();
     if (engine && (await engine.isAvailable())) {
       try {
-        const analysis = await engine.analyze(candidates, context);
-        enrichedCandidates = applyAiEnrichments(candidates, analysis.enrichments);
+        const analysis = await engine.analyze(semanticCandidates, context);
+        enrichedCandidates = applyAiEnrichments(semanticCandidates, analysis.enrichments);
         aiEngineId = analysis.engineId;
         aiWarnings = analysis.warnings.length > 0 ? analysis.warnings : undefined;
       } catch (err) {

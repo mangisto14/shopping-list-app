@@ -26,7 +26,12 @@ describe('importService.runImport', () => {
     expect(result.sourceId).toBe('paste-text');
     expect(result.extractorId).toBe('plain-text');
     expect(result.normalizerId).toBe('rule-based');
-    expect(result.candidates.map((c) => c.name)).toEqual(['milk', 'bread']);
+    // Phase 2B's Semantic Analysis stage recognizes "milk"/"bread" as
+    // known product aliases and canonicalizes them to their Hebrew
+    // names (see src/import/knowledge/products.ts) - a real,
+    // deterministic improvement over RuleBasedNormalizer's output,
+    // applied via the same enrichment pipeline as AI Analysis.
+    expect(result.candidates.map((c) => c.name)).toEqual(['חלב', 'לחם']);
     expect(result.candidates[0]).toMatchObject({ quantity: 2, included: true });
   });
 

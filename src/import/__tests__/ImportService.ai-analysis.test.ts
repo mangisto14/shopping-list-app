@@ -47,7 +47,16 @@ describe('importService.runImport - AI Analysis stage', () => {
     expect(result.aiEngineId).toBeUndefined();
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0].name).toBe('לחם');
-    expect(result.candidates[0].aiSuggestions).toBeUndefined();
+    // The AI Analysis engine failing must never block the pipeline -
+    // but Phase 2B's Semantic Analysis stage is a separate, independent
+    // stage (deterministic, no AI engine involved) that still ran
+    // successfully and legitimately populated its own suggestions
+    // (a category/unit guess from the knowledge base) before the
+    // broken AI engine was even reached.
+    expect(result.candidates[0].aiSuggestions).toMatchObject({
+      category: { confidence: 'medium' },
+      unit: { confidence: 'low' },
+    });
   });
 
   it('falls back cleanly when no AI engine is available at all', async () => {
