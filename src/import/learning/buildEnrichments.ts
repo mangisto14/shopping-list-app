@@ -51,6 +51,14 @@ export function correctionsToEnrichments(
       enrichment.quantity = { value: correction.quantity, confidence: 'high', reason: REASON };
     }
 
+    // Reused directly (before any AI call), never re-derived - see
+    // LearningCorrection.mergeKey's own doc comment. Not confidence-
+    // wrapped like the fields above: mergeKey has no Preview UI/badge
+    // of its own, so applyAiEnrichments applies it as a plain override.
+    if (correction.mergeKey) {
+      enrichment.mergeKey = correction.mergeKey;
+    }
+
     enrichments.push(enrichment);
   }
 

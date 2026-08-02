@@ -619,6 +619,48 @@ While rebuilding this write path, a latent pre-existing bug surfaced: two saves 
 
 tsc/build/lint clean. 174 Vitest tests pass (23 new). Full Playwright suite passes (64 specs, including all 17 Smart Import specs); one unrelated pre-existing swipe-gesture flake in `dev-settings.spec.ts`, confirmed by isolated re-run to pass and to touch no file this feature changed.
 
+## Generic merge identity (implemented)
+
+Manual testing found the "final import commit fixes" merge (name-equality only) too literal: "חלב 3%", "חלב 1%", and "חלב 500 מ״ל" all failed to merge with an existing plain "חלב", each starting its own group, while a product genuinely different from milk (soy/almond/coconut milk) obviously must never merge with it either. The fix is a single generic identity function - no per-product rules anywhere.
+
+### `mergeKey` (`src/import/semantic/mergeKey.ts`)
+
+`computeMergeKey(name)` strips every whitespace-separated token that is pure quantity/size information - a bare number, a percentage, a multiplier, a known unit synonym (reusing `knowledge/units.ts`'s `normalizeUnit`), or a number fused directly onto one of those with no space ("500מ״ל") - wherever it appears in the string, not just at an edge (unlike `parseQuantity.ts`, which only reads a quantity/unit from a fixed leading/trailing position for the *display* quantity/unit fields - it never recognizes a "product, then quantity, then unit" shape like "חלב 500 מ״ל"). Every other token is kept, untouched, in its original order - a distinguishing word ("שקדים"/"סויה"/"קוקוס"/"זירו"/"מלא" vs "לבן") is never stripped, so two genuinely different products never collapse into one identity. Falls back to the untouched name if stripping would empty it out entirely. Hebrew GERSHAYIM/GERESH (״ ׳) are folded to the ASCII quotes `units.ts` is keyed on, purely for this token check.
+
+`chooseRicherName(existingName, candidateName)` picks whichever name carries more information (more words; a tie falls to the longer string; a true tie keeps the existing name) - used when a merge is found, so a plain existing "חלב" merging with an incoming "חלב 3%" doesn't silently discard the fat-content detail.
+
+### `ImportItemCandidate.mergeKey` and `AiItemEnrichment.mergeKey`
+
+A new, optional, plain (never confidence-wrapped, never shown in Preview - no `aiPendingMergeKey`) field on the candidate. `applyAiEnrichments` - the one shared merge function every stage already uses - keeps it in sync automatically: every candidate leaving that function gets `mergeKey` derived fresh from its (possibly just-renamed) `name`, unless the stage's own enrichment supplies an explicit override. This runs unconditionally, even for a candidate a given stage's enrichments never touched, so a rename from an *earlier* stage still gets its mergeKey refreshed. Only Learning Lookup ever supplies an explicit override (see below) - Semantic Analysis and the AI Assistant both get a correct `mergeKey` "for free" from the same generic derivation, satisfying "provider-agnostic, works with AI results, learned corrections, and future OCR/image imports" without asking any provider to invent one itself.
+
+This field is populated purely for observability/testability. `ImportService.commit()` and `learning/buildCorrections.ts` never read it for a real decision - Preview has no UI to keep it in sync with a name the user just typed over, so both always call `computeMergeKey()` fresh on whatever `name` is truly final at that point. Since the field is always kept in sync by `applyAiEnrichments` whenever nothing further changes it, this recompute is normally a no-op - it just also happens to be the only trustworthy answer after a Preview edit.
+
+### The merge algorithm (`ImportService.commit()`)
+
+`buildActiveItemIndex` now indexes existing active items by `computeMergeKey(item.name)` (a `Map<mergeKey, ExistingItemForMerge[]>`, since more than one existing item can rarely share a mergeKey - e.g. the same product recorded under two different categories by mistake before this feature existed to catch it). `findMergeTarget` looks up the candidate's mergeKey; a single item at that key always matches regardless of category (a candidate's own guessed category is often wrong or still unresolved, and the existing item's placement is the more trustworthy signal when there's no ambiguity) - category only disambiguates when the bucket has more than one item.
+
+When a match is found: the new rows are inserted using `chooseRicherName(match.name, candidate.name)` for the name, the existing item's `categoryId`, and `match.unit ?? candidate.unit` / `match.notes ?? candidate.notes` for unit/notes (prefer the existing item's curated value, but never silently drop a value the import found that the existing item simply doesn't have).
+
+**Known trade-off, by design**: existing rows are never modified (still true, unchanged from the prior phase - no rename capability was added to this module's public surface, per this task's "keep ImportService public API unchanged" constraint). When `chooseRicherName` picks the *candidate's* name over the existing item's, the newly inserted rows render as their own, differently-labeled group ("חלב 3%", 2x) alongside the untouched pre-existing one ("חלב", 1x) - two clearly, textually-DIFFERENT rows, never the silent SAME-text duplicate the original merge feature was built to prevent (that guarantee - see "final import commit fixes" above - is about two rows sharing the exact same displayed text, which this never produces). Closing this gap fully (retroactively relabeling the existing rows too, so the whole group always shows one name) would need a rename-existing-rows capability, which is a public API change and therefore out of scope here.
+
+### Learning also stores mergeKey
+
+`user_import_learning` gained a `merge_key text` column (migration `20260802150000_user_import_learning_merge_key.sql`, nullable, no backfill - a pre-existing row simply has no learned mergeKey yet, and every consumer already treats a missing value as "derive it generically instead"). `buildManualCorrection`/`buildApprovedCorrection` (`learning/buildCorrections.ts`) tag `correction.mergeKey = computeMergeKey(edited.name)` onto any correction that's otherwise non-empty - always derived from the FINAL name being learned, never an independent value. `correctionsToEnrichments` (`learning/buildEnrichments.ts`) passes a stored `mergeKey` straight through as the enrichment's plain override, so a future import of the same text reuses it directly - before any AI call, same "check learning first" pattern already used for name/category/unit/quantity - rather than recomputing. `lookupMany` is otherwise unchanged.
+
+### Tests
+
+- `src/import/semantic/__tests__/mergeKey.test.ts` (24): milk/rice/flour/beverages, percentage variants, package-size variants (including a fused "500מ״ל" with no space), and every "must NOT merge" case from the spec (soy/almond/coconut milk, jasmine vs basmati rice, white vs whole-wheat flour, Coke vs Coke Zero, Coke vs Sprite) - plus `chooseRicherName`'s word-count/length/tie rules.
+- `src/import/ai/__tests__/applyEnrichments.test.ts`: mergeKey is derived from a candidate's new name after a rename, and an explicit override (a learned mergeKey) wins over generic derivation.
+- `src/import/learning/__tests__/buildEnrichments.test.ts` (new file): a stored mergeKey is passed through as a plain override; a legacy correction with none leaves it unset (generic fallback applies).
+- `src/import/learning/__tests__/buildCorrections.test.ts` and `ImportService.saveLearning.test.ts`: every existing/new correction assertion updated to include the tagged-along `mergeKey`.
+- `src/import/learning/__tests__/LearningRepository.test.ts`: `merge_key` read on a hit, omitted for a legacy row, and written on save.
+- `src/import/__tests__/ImportService.test.ts`: a dedicated `describe` block - milk/rice/flour/beverage merges and must-NOT-merge cases at the `commit()` level, category disambiguating between two same-mergeKey existing items, a completed item never picked as a target, and the unit/notes "never lose information" fallback.
+- `e2e/smart-import-merge.spec.ts` (+2): "חלב 3%" recognized as the same product as an existing plain "חלב" (merges, richer name used for the new rows); soy milk never merges with it.
+
+### Validation
+
+tsc/build/lint clean. 218 Vitest tests pass (35 new/updated). Full Playwright suite passes (66 specs, all 19 Smart Import specs); one unrelated pre-existing swipe-gesture flake in `dev-console-live.spec.ts`, confirmed by isolated re-run to pass and to touch no file this feature changed.
+
 ## Future enhancement (not part of Phase 1): optional AI Review stage
 
 **Not implemented. Not scheduled. This section exists only to confirm the Phase 1 architecture reserves room for it, so adding it later doesn't force a redesign.**

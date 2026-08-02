@@ -11,6 +11,14 @@ export interface LearningCorrection {
   categoryId?: string | null;
   unit?: string;
   quantity?: number;
+  // The generic merge identity (see semantic/mergeKey.ts) resolved at
+  // the moment this correction was saved - always derived from
+  // whichever name is being learned alongside it, never an
+  // independent/arbitrary value (see buildCorrections.ts). Stored so a
+  // later import of the same text reuses it directly rather than
+  // recomputing, keeping a user's past grouping decisions stable even
+  // if the generic algorithm's own rules change later.
+  mergeKey?: string;
 }
 
 // 'manual': the user explicitly typed/picked a different value in the

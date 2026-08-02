@@ -38,10 +38,20 @@ describe('wasCandidateModified', () => {
 });
 
 describe('buildManualCorrection', () => {
-  it('captures only the fields that changed', () => {
+  it('captures only the fields that changed, plus the mergeKey derived from the final name', () => {
     const original = candidate({ categoryId: null, unit: null, quantity: 1 });
     const edited = { ...original, categoryId: 'cat-fruit', quantity: 3 };
-    expect(buildManualCorrection(original, edited)).toEqual({ categoryId: 'cat-fruit', quantity: 3 });
+    expect(buildManualCorrection(original, edited)).toEqual({
+      categoryId: 'cat-fruit',
+      quantity: 3,
+      mergeKey: 'קישוא',
+    });
+  });
+
+  it('derives the mergeKey from the EDITED name, not the original one', () => {
+    const original = candidate({ name: 'קישוא', categoryId: null });
+    const edited = { ...original, name: 'קישוא 3%', categoryId: 'cat-fruit' };
+    expect(buildManualCorrection(original, edited).mergeKey).toBe('קישוא');
   });
 
   it('does not learn clearing a unit', () => {
@@ -52,13 +62,13 @@ describe('buildManualCorrection', () => {
 });
 
 describe('buildApprovedCorrection', () => {
-  it('learns only fields that were actually auto-applied (present in aiSuggestions, not pending)', () => {
+  it('learns only fields that were actually auto-applied (present in aiSuggestions, not pending), plus mergeKey', () => {
     const c = candidate({
       categoryId: 'cat-veg',
       categoryName: 'ירקות',
       aiSuggestions: { category: { confidence: 'medium' } },
     });
-    expect(buildApprovedCorrection(c)).toEqual({ categoryId: 'cat-veg' });
+    expect(buildApprovedCorrection(c)).toEqual({ categoryId: 'cat-veg', mergeKey: 'קישוא' });
   });
 
   it('learns name/unit/quantity together when all were auto-applied', () => {
@@ -79,6 +89,7 @@ describe('buildApprovedCorrection', () => {
       unit: "יח'",
       quantity: 3,
       categoryId: 'cat-veg',
+      mergeKey: 'קישוא',
     });
   });
 
@@ -109,7 +120,7 @@ describe('buildPendingLearningSave', () => {
     const result = buildPendingLearningSave(original, edited);
     expect(result).toEqual({
       originalText: 'קישוא',
-      correction: { categoryId: 'cat-veg' },
+      correction: { categoryId: 'cat-veg', mergeKey: 'קישוא' },
       source: 'approved_ai',
     });
   });
@@ -121,7 +132,7 @@ describe('buildPendingLearningSave', () => {
     const result = buildPendingLearningSave(original, edited);
     expect(result).toEqual({
       originalText: 'קישוא',
-      correction: { categoryId: 'cat-fruit' },
+      correction: { categoryId: 'cat-fruit', mergeKey: 'קישוא' },
       source: 'manual',
     });
   });

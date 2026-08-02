@@ -19,6 +19,7 @@ interface LearningRow {
   category_id: string | null;
   unit: string | null;
   quantity: number | null;
+  merge_key: string | null;
 }
 
 // Higher number wins. A save may overwrite an existing row only when
@@ -35,6 +36,7 @@ function rowToCorrection(row: LearningRow): LearningCorrection {
   if (row.category_id !== null) correction.categoryId = row.category_id;
   if (row.unit !== null) correction.unit = row.unit;
   if (row.quantity !== null) correction.quantity = row.quantity;
+  if (row.merge_key != null) correction.mergeKey = row.merge_key;
   return correction;
 }
 
@@ -80,7 +82,7 @@ export const learningRepository = {
     if (toQuery.length > 0) {
       const { data, error } = await supabase
         .from('user_import_learning')
-        .select('original_text, normalized_name, category_id, unit, quantity')
+        .select('original_text, normalized_name, category_id, unit, quantity, merge_key')
         .eq('user_id', userId)
         .in('original_text', toQuery);
 
@@ -171,6 +173,7 @@ export const learningRepository = {
       category_id: correction.categoryId ?? null,
       unit: correction.unit ?? null,
       quantity: correction.quantity ?? null,
+      merge_key: correction.mergeKey ?? null,
       source,
       updated_at: new Date().toISOString(),
     }));

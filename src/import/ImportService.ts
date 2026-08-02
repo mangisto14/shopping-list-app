@@ -25,8 +25,8 @@ import { ALL_EXTRACTORS } from './extractors/registerExtractors';
 import { ALL_NORMALIZERS, DEFAULT_NORMALIZER_ID } from './normalizers/registerNormalizers';
 import { ALL_VALIDATORS, DEFAULT_VALIDATOR_ID } from './validators/registerValidators';
 import { applyAiEnrichments } from './ai/applyEnrichments';
-import { normalizeForComparison } from './ai/textUtils';
 import { analyzeCandidates } from './semantic/SemanticAnalyzer';
+import { chooseRicherName, computeMergeKey } from './semantic/mergeKey';
 import { detectBatchIssues } from './local/BatchHeuristics';
 import { learningRepository } from './learning/LearningRepository';
 import { correctionsToEnrichments } from './learning/buildEnrichments';
@@ -38,20 +38,48 @@ import { ALL_AI_ASSISTANT_PROVIDERS, DEFAULT_AI_ASSISTANT_PROVIDER_ID } from './
 // Only ACTIVE items are eligible merge targets - a long-since-completed
 // item shouldn't silently become the metadata source (and grouping
 // target) for a fresh import; the user is about to buy the imported
-// one, not the one they already checked off. Case/whitespace-
-// insensitive match (reusing the exact same normalizeForComparison
-// every other duplicate/match check in this module already uses) -
-// but the row(s) actually inserted use the existing item's EXACT
-// stored name, never the normalized form, since ShoppingList.tsx's
-// clusterByName groups by exact string equality.
-function buildActiveItemIndex(existingItems: ExistingItemForMerge[]): Map<string, ExistingItemForMerge> {
-  const index = new Map<string, ExistingItemForMerge>();
+// one, not the one they already checked off.
+//
+// Indexed by the generic merge identity (mergeKey - see
+// semantic/mergeKey.ts), computed fresh from each existing item's own
+// name - NOT by exact/normalized name equality as before. This is what
+// lets "חלב 3%" merge into an existing plain "חלב", or "קולה 500 מ״ל"
+// merge into an existing "קולה 1.5 ליטר": same product, different
+// amount of it. A generic product-identity word ("שקדים"/"סויה"/
+// "קוקוס"/"זירו"/...) is never stripped by computeMergeKey, so it
+// still keeps two genuinely different products apart.
+function buildActiveItemIndex(existingItems: ExistingItemForMerge[]): Map<string, ExistingItemForMerge[]> {
+  const index = new Map<string, ExistingItemForMerge[]>();
   for (const item of existingItems) {
     if (item.isDone) continue;
-    const key = normalizeForComparison(item.name);
-    if (key && !index.has(key)) index.set(key, item);
+    const key = computeMergeKey(item.name);
+    if (!key) continue;
+    const bucket = index.get(key);
+    if (bucket) bucket.push(item);
+    else index.set(key, [item]);
   }
   return index;
+}
+
+// It's rare, but more than one active item can legitimately share a
+// mergeKey (e.g. the same product recorded under two different
+// categories by mistake, before this feature existed to catch it) -
+// when that happens, category is what disambiguates WHICH of them
+// this candidate should join, per "compare mergeKey + category". A
+// single candidate at that mergeKey always matches regardless of
+// category, exactly as before this feature (a candidate's own guessed
+// category is often wrong/unresolved, and the existing item's
+// placement is the more trustworthy signal when there's no ambiguity
+// to resolve).
+function findMergeTarget(
+  index: Map<string, ExistingItemForMerge[]>,
+  mergeKey: string,
+  candidateCategoryId: string | null
+): ExistingItemForMerge | null {
+  const bucket = index.get(mergeKey);
+  if (!bucket || bucket.length === 0) return null;
+  if (bucket.length === 1) return bucket[0];
+  return (candidateCategoryId && bucket.find((item) => item.categoryId === candidateCategoryId)) || bucket[0];
 }
 
 function getSource(id: ImportSourceId) {
@@ -245,19 +273,38 @@ export const importService: ImportServiceType = {
     for (const candidate of result.candidates) {
       if (!candidate.included) continue;
 
-      // Merge with an existing active item, if this candidate's FINAL
-      // name (after Preview edits - `candidate` here is always
+      // Merge with an existing active item when this candidate's FINAL
+      // mergeKey (after Preview edits - `candidate` here is always
       // caller-supplied post-edit state, never the pipeline's original
-      // output) matches one. Reusing its exact name/category/unit/
-      // notes is what makes the newly inserted rows actually join its
-      // existing "Nx" group (see buildActiveItemIndex's doc comment)
-      // instead of starting a second, duplicate-looking one - no
-      // existing row is read from again after this or modified.
-      const match = activeItemByName.get(normalizeForComparison(candidate.name));
-      const name = match ? match.name : candidate.name;
+      // output) matches one, category disambiguating only when more
+      // than one existing item shares that mergeKey (see
+      // findMergeTarget). Computed fresh from `candidate.name` here,
+      // never read off `candidate.mergeKey` - Preview has no UI to keep
+      // that field in sync with a name the user just edited, so only a
+      // fresh computation from the truly-final name is trustworthy
+      // (see ImportItemCandidate.mergeKey's own doc comment).
+      const mergeKey = computeMergeKey(candidate.name);
+      const match = findMergeTarget(activeItemByName, mergeKey, candidate.categoryId);
+      // The richer of the two names is what the new rows are inserted
+      // with - "never lose useful information" (a plain existing
+      // "חלב" merging with an incoming "חלב 3%" should end up showing
+      // the fat content, not silently drop it). This can leave the new
+      // rows under a different label than the untouched existing ones
+      // (existing rows are never modified - no rename capability is
+      // part of this module's public surface) - two clearly,
+      // DIFFERENTLY labeled rows for the same product, never the
+      // silent SAME-text duplicate the merge feature was originally
+      // built to prevent (see the "final import commit fixes" tests
+      // above, all still passing unchanged).
+      const name = match ? chooseRicherName(match.name, candidate.name) : candidate.name;
       const categoryId = match ? match.categoryId : candidate.categoryId;
-      const unit = match ? match.unit : candidate.unit;
-      const notes = match ? match.notes : candidate.notes;
+      // Same "never lose useful information" principle for unit/notes:
+      // prefer the existing item's value (the curated, presumably
+      // deliberate choice), but fall back to the candidate's own
+      // when the existing item simply has none - never silently
+      // discard a unit/notes value this import actually found.
+      const unit = match ? (match.unit ?? candidate.unit) : candidate.unit;
+      const notes = match ? (match.notes ?? candidate.notes) : candidate.notes;
 
       // "Quantity" reuses this app's existing convention (repeat-insert
       // N times) rather than a persisted quantity column - same

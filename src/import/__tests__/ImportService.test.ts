@@ -270,4 +270,277 @@ describe('importService.commit', () => {
       }
     });
   });
+
+  describe('generic merge identity (mergeKey) - not just exact name equality', () => {
+    function candidate(overrides: Partial<Parameters<typeof importService.commit>[0]['candidates'][number]>) {
+      return {
+        id: '1',
+        rawText: 'raw',
+        name: 'name',
+        quantity: 1,
+        unit: null,
+        categoryId: null,
+        categoryName: null,
+        notes: null,
+        included: true,
+        ...overrides,
+      };
+    }
+
+    it('milk: "חלב 3%" merges into an existing plain "חלב"', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [{ name: 'חלב', categoryId: 'cat-dairy', unit: null, notes: null, isDone: false }];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'חלב 3%', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      // The richer candidate name ("חלב 3%") is preserved for the new
+      // row, not silently dropped in favor of the plainer existing one.
+      expect(addItem).toHaveBeenCalledWith('חלב 3%', 'cat-dairy', { unit: null, notes: null });
+    });
+
+    it('milk: "חלב 500 מ״ל" (package size, not a leading/trailing-only pattern) also merges into "חלב"', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [{ name: 'חלב', categoryId: 'cat-dairy', unit: null, notes: null, isDone: false }];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'חלב 500 מ״ל', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      expect(addItem).toHaveBeenCalledWith('חלב 500 מ״ל', 'cat-dairy', { unit: null, notes: null });
+    });
+
+    it('milk: soy milk never merges into plain milk - a genuinely different product', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [{ name: 'חלב', categoryId: 'cat-dairy', unit: null, notes: null, isDone: false }];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'חלב סויה', categoryId: 'cat-guessed', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      // No merge target found -> the candidate's OWN metadata is used,
+      // never the existing plain-milk item's.
+      expect(addItem).toHaveBeenCalledWith('חלב סויה', 'cat-guessed', { unit: null, notes: null });
+    });
+
+    it('milk: almond milk and soy milk are also distinct from each other', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [{ name: 'חלב סויה', categoryId: 'cat-dairy', unit: null, notes: null, isDone: false }];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'חלב שקדים', categoryId: 'cat-guessed', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      expect(addItem).toHaveBeenCalledWith('חלב שקדים', 'cat-guessed', { unit: null, notes: null });
+    });
+
+    it('rice: "אורז יסמין 500 גרם" merges into an existing "אורז יסמין 1 ק"ג"', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [
+        { name: 'אורז יסמין 1 ק"ג', categoryId: 'cat-grains', unit: null, notes: null, isDone: false },
+      ];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'אורז יסמין 500 גרם', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      // Both names carry the same word count - the tie-break falls to
+      // the (slightly) longer string, which happens to be the
+      // candidate's here ("500 גרם" vs '1 ק"ג').
+      expect(addItem).toHaveBeenCalledWith('אורז יסמין 500 גרם', 'cat-grains', { unit: null, notes: null });
+    });
+
+    it('rice: jasmine rice never merges into basmati rice', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [{ name: 'אורז בסמטי', categoryId: 'cat-grains', unit: null, notes: null, isDone: false }];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'אורז יסמין 1 ק"ג', categoryId: 'cat-guessed', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      expect(addItem).toHaveBeenCalledWith('אורז יסמין 1 ק"ג', 'cat-guessed', { unit: null, notes: null });
+    });
+
+    it('flour: white flour and whole-wheat flour never merge', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [{ name: 'קמח לבן 1 ק"ג', categoryId: 'cat-baking', unit: null, notes: null, isDone: false }];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'קמח מלא 1 ק"ג', categoryId: 'cat-guessed', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      expect(addItem).toHaveBeenCalledWith('קמח מלא 1 ק"ג', 'cat-guessed', { unit: null, notes: null });
+    });
+
+    it('beverages: "קולה 500 מ״ל" merges into an existing "קולה 1.5 ליטר"', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [
+        { name: 'קולה 1.5 ליטר', categoryId: 'cat-drinks', unit: null, notes: null, isDone: false },
+      ];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'קולה 500 מ״ל', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      expect(addItem).toHaveBeenCalledWith('קולה 1.5 ליטר', 'cat-drinks', { unit: null, notes: null });
+    });
+
+    it('beverages: Coke Zero never merges with regular Coke', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [
+        { name: 'קולה 1.5 ליטר', categoryId: 'cat-drinks', unit: null, notes: null, isDone: false },
+      ];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'קולה זירו 1.5 ליטר', categoryId: 'cat-guessed', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      expect(addItem).toHaveBeenCalledWith('קולה זירו 1.5 ליטר', 'cat-guessed', { unit: null, notes: null });
+    });
+
+    it('category disambiguates when more than one existing item shares a mergeKey', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [
+        { name: 'חלב', categoryId: 'cat-dairy', unit: "יח'", notes: null, isDone: false },
+        { name: 'חלב', categoryId: 'cat-snacks', unit: null, notes: 'טעות סופר', isDone: false },
+      ];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'חלב 3%', categoryId: 'cat-snacks', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      expect(addItem).toHaveBeenCalledWith('חלב 3%', 'cat-snacks', { unit: null, notes: 'טעות סופר' });
+    });
+
+    it('never loses a unit/notes value the import found just because the existing item has none', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [{ name: 'חלב', categoryId: 'cat-dairy', unit: null, notes: null, isDone: false }];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'חלב 3%', unit: 'ליטר', notes: 'דל שומן', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      expect(addItem).toHaveBeenCalledWith('חלב 3%', 'cat-dairy', { unit: 'ליטר', notes: 'דל שומן' });
+    });
+
+    it('a completed (is_done) item at the same mergeKey is never picked as the merge target', async () => {
+      const addItem = vi.fn().mockResolvedValue(true);
+      const existingItems = [{ name: 'חלב', categoryId: 'cat-dairy', unit: null, notes: null, isDone: true }];
+
+      await importService.commit(
+        {
+          sourceId: 'paste-text',
+          extractorId: 'plain-text',
+          normalizerId: 'rule-based',
+          extractionWarnings: [],
+          issues: [],
+          candidates: [candidate({ name: 'חלב 3%', categoryId: 'cat-guessed', quantity: 1 })],
+        },
+        addItem,
+        existingItems
+      );
+
+      expect(addItem).toHaveBeenCalledWith('חלב 3%', 'cat-guessed', { unit: null, notes: null });
+    });
+  });
 });

@@ -18,10 +18,10 @@ function candidate(overrides: Partial<ImportItemCandidate>): ImportItemCandidate
 }
 
 describe('applyAiEnrichments', () => {
-  it('leaves a candidate untouched when it has no matching enrichment', () => {
+  it('leaves every real field untouched when there is no matching enrichment, but still derives mergeKey', () => {
     const candidates = [candidate({ id: 'c1' })];
     const result = applyAiEnrichments(candidates, []);
-    expect(result[0]).toEqual(candidates[0]);
+    expect(result[0]).toEqual({ ...candidates[0], mergeKey: 'item' });
   });
 
   it('high confidence: writes directly into the real field, no pending value', () => {
@@ -68,6 +68,27 @@ describe('applyAiEnrichments', () => {
     expect(result.aiAmbiguous).toBe(true);
     expect(result.aiDuplicateOfCandidateId).toBe('c0');
     expect(result.name).toBe('x');
+  });
+
+  describe('mergeKey', () => {
+    it('is derived from a renamed candidate\'s new name, not its old one', () => {
+      const enrichment: AiItemEnrichment = {
+        candidateId: 'c1',
+        name: { value: 'חלב 3%', confidence: 'high' },
+      };
+      const [result] = applyAiEnrichments([candidate({ id: 'c1', name: 'חלב 500 מ״ל' })], [enrichment]);
+      expect(result.mergeKey).toBe('חלב');
+    });
+
+    it('an explicit override from the enrichment (a learned mergeKey) wins over generic derivation', () => {
+      const enrichment: AiItemEnrichment = {
+        candidateId: 'c1',
+        category: { value: { id: 'cat-1', name: 'Dairy' }, confidence: 'high' },
+        mergeKey: 'custom-learned-key',
+      };
+      const [result] = applyAiEnrichments([candidate({ id: 'c1', name: 'חלב' })], [enrichment]);
+      expect(result.mergeKey).toBe('custom-learned-key');
+    });
   });
 
   it('applies multiple fields at once independently', () => {

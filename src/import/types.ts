@@ -181,6 +181,16 @@ export interface ImportItemCandidate {
   // always a suggestion, never applied automatically. Preview offers
   // an explicit merge action; nothing merges without the user tapping it.
   aiDuplicateOfCandidateId?: string | null;
+  // The generic, product-agnostic merge identity (see
+  // semantic/mergeKey.ts) - always kept in sync with `name` by
+  // applyAiEnrichments (never confidence-gated, never shown/edited in
+  // Preview - there is no "aiPendingMergeKey"). Populated purely for
+  // observability/testing; ImportService.commit()/saveLearning() never
+  // trust a possibly-stale copy of this field - they always derive it
+  // fresh from whichever `name` is final at that point (which also
+  // correctly reflects a Preview name edit this field has no way to
+  // react to on its own, since there is no Preview UI for it).
+  mergeKey?: string;
 }
 
 // One field AI Analysis enriched for one candidate, with its
@@ -200,6 +210,12 @@ export interface AiItemEnrichment {
   notes?: AiEnrichedField;
   ambiguous?: boolean;
   duplicateOfCandidateId?: string | null;
+  // An explicit override for the resolved merge identity - set only by
+  // Learning Lookup, when a past correction stored one (see
+  // learning/buildEnrichments.ts). Every other source leaves this
+  // unset and lets applyAiEnrichments derive it generically from
+  // whatever `name` ends up being instead (see mergeKey.ts).
+  mergeKey?: string;
 }
 
 // Phase 2's TextUnderstandingEngine/AiAnalysisResult interfaces
@@ -278,19 +294,26 @@ export interface ImportService {
   // gets the previous, always-insert-new-rows behavior.
   //
   // Before inserting a candidate's rows, looks for an existing ACTIVE
-  // (not done) item on the list whose name matches the candidate's
-  // FINAL name (after Preview edits) once normalized. If found, the
-  // new rows are inserted using that existing item's exact name and
-  // metadata (category/unit/notes) instead of the candidate's own -
-  // this app's quantity model is "N rows sharing one name = an Nx
+  // (not done) item on the list whose generic merge identity
+  // (mergeKey - see semantic/mergeKey.ts, computed from the candidate's
+  // FINAL name after Preview edits) matches one, category
+  // disambiguating only when more than one existing item shares that
+  // mergeKey. mergeKey - not the full display name - is the identity:
+  // "חלב 3%"/"חלב 500 מ״ל" merge into a plain existing "חלב" (same
+  // product, different amount), while "חלב שקדים"/"חלב סויה" never do
+  // (a different product). If found, the new rows are inserted using
+  // the RICHER of the existing item's name and the candidate's own
+  // (never silently dropping a more descriptive name - "never lose
+  // useful information") plus the existing item's category/unit/notes
+  // - this app's quantity model is "N rows sharing one name = an Nx
   // group" (see ShoppingList.tsx's clusterByName, which groups by
-  // exact name string *within* a category section), so reusing the
-  // existing item's exact name/category is what makes the newly
-  // inserted rows actually join its existing group instead of
-  // silently starting a second, differently-styled one - rather than
-  // literally updating a `quantity` column, which does not exist on
-  // `items`. No existing row is ever modified; only which name/
-  // metadata new rows are inserted with changes.
+  // exact string equality *within* a category section), so reusing the
+  // existing item's category/unit is what makes the newly inserted
+  // rows actually join its existing group instead of silently starting
+  // a second, differently-styled one - rather than literally updating
+  // a `quantity` column, which does not exist on `items`. No existing
+  // row is ever modified; only which name/metadata new rows are
+  // inserted with changes.
   commit(
     result: ValidatedImportResult,
     addItem: AddItemFn,

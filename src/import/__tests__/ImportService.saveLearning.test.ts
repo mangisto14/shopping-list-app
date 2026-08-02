@@ -50,7 +50,7 @@ describe('importService.saveLearning', () => {
     await importService.saveLearning(original, edited, context);
 
     expect(saveCorrections).toHaveBeenCalledWith('user-1', [
-      { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' }, source: 'manual' },
+      { originalText: 'קישוא', correction: { categoryId: 'cat-fruit', mergeKey: 'קישוא' }, source: 'manual' },
     ]);
   });
 
@@ -83,8 +83,8 @@ describe('importService.saveLearning', () => {
 
     expect(saveCorrections).toHaveBeenCalledTimes(1);
     expect(saveCorrections).toHaveBeenCalledWith('user-1', [
-      { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' }, source: 'manual' },
-      { originalText: 'חלב', correction: { unit: 'ליטר' }, source: 'manual' },
+      { originalText: 'קישוא', correction: { categoryId: 'cat-fruit', mergeKey: 'קישוא' }, source: 'manual' },
+      { originalText: 'חלב', correction: { unit: 'ליטר', mergeKey: 'קישוא' }, source: 'manual' },
     ]);
   });
 
@@ -98,7 +98,7 @@ describe('importService.saveLearning', () => {
     await importService.saveLearning(original, edited, context);
 
     expect(saveCorrections).toHaveBeenCalledWith('user-1', [
-      { originalText: 'קישוא', correction: { quantity: 3 }, source: 'manual' },
+      { originalText: 'קישוא', correction: { quantity: 3, mergeKey: 'קישוא' }, source: 'manual' },
     ]);
   });
 
@@ -112,7 +112,7 @@ describe('importService.saveLearning', () => {
     await importService.saveLearning(original, edited, context);
 
     expect(saveCorrections).toHaveBeenCalledWith('user-1', [
-      { originalText: 'קישוא', correction: { categoryId: null }, source: 'manual' },
+      { originalText: 'קישוא', correction: { categoryId: null, mergeKey: 'קישוא' }, source: 'manual' },
     ]);
   });
 
@@ -133,7 +133,7 @@ describe('importService.saveLearning', () => {
       await importService.saveLearning(original, edited, context);
 
       expect(saveCorrections).toHaveBeenCalledWith('user-1', [
-        { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' }, source: 'approved_ai' },
+        { originalText: 'קישוא', correction: { categoryId: 'cat-fruit', mergeKey: 'קישוא' }, source: 'approved_ai' },
       ]);
     });
 
@@ -148,7 +148,7 @@ describe('importService.saveLearning', () => {
         categoryName: 'פירות',
         aiSuggestions: { category: { confidence: 'medium' } },
       });
-      const editedManually = candidate({ id: 'c2', rawText: 'חלב', unit: null });
+      const editedManually = candidate({ id: 'c2', rawText: 'חלב', name: 'חלב', unit: null });
 
       const original = [resolvedButUntouched, editedManually];
       const edited = [{ ...resolvedButUntouched }, { ...editedManually, unit: 'ליטר' }];
@@ -156,8 +156,8 @@ describe('importService.saveLearning', () => {
       await importService.saveLearning(original, edited, context);
 
       expect(saveCorrections).toHaveBeenCalledWith('user-1', [
-        { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' }, source: 'approved_ai' },
-        { originalText: 'חלב', correction: { unit: 'ליטר' }, source: 'manual' },
+        { originalText: 'קישוא', correction: { categoryId: 'cat-fruit', mergeKey: 'קישוא' }, source: 'approved_ai' },
+        { originalText: 'חלב', correction: { unit: 'ליטר', mergeKey: 'חלב' }, source: 'manual' },
       ]);
     });
 

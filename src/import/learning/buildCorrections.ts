@@ -7,6 +7,7 @@
 //     implicit approval of whatever Semantic Analysis/Learning/the AI
 //     Assistant already resolved, saved as 'approved_ai'.
 import type { ImportItemCandidate } from '../types';
+import { computeMergeKey } from '../semantic/mergeKey';
 import type { LearningCorrection, LearningSource, PendingLearningSave } from './types';
 
 // Whether the user touched ANYTHING in Preview for this candidate -
@@ -35,6 +36,15 @@ export function buildManualCorrection(original: ImportItemCandidate, edited: Imp
   if (edited.categoryId !== original.categoryId) correction.categoryId = edited.categoryId;
   if (edited.unit && edited.unit !== original.unit) correction.unit = edited.unit;
   if (edited.quantity !== original.quantity) correction.quantity = edited.quantity;
+  // Tagged onto the save whenever there's anything to save at all -
+  // always derived fresh from the FINAL edited name (never read off
+  // `edited.mergeKey`, which Preview has no way to keep in sync with a
+  // name the user just typed over - see ImportItemCandidate.mergeKey's
+  // own doc comment) so the identity that gets learned always matches
+  // the name it's learned alongside.
+  if (Object.keys(correction).length > 0 && edited.name.trim()) {
+    correction.mergeKey = computeMergeKey(edited.name);
+  }
   return correction;
 }
 
@@ -63,6 +73,10 @@ export function buildApprovedCorrection(candidate: ImportItemCandidate): Learnin
   }
   if (suggestions.quantity && candidate.aiPendingQuantity === undefined) {
     correction.quantity = candidate.quantity;
+  }
+
+  if (Object.keys(correction).length > 0 && candidate.name.trim()) {
+    correction.mergeKey = computeMergeKey(candidate.name);
   }
 
   return correction;

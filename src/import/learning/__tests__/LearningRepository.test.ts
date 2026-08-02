@@ -97,6 +97,35 @@ describe('learningRepository.lookupMany', () => {
     // purposes at all - see LearningRepository.ts's own comment.
     expect(result.get('קישוא')).toEqual({ categoryId: 'cat-veg' });
   });
+
+  it('includes a stored mergeKey in the returned correction when the row has one', async () => {
+    inMock.mockResolvedValue({
+      data: [
+        {
+          original_text: 'קולה זירו',
+          normalized_name: 'קולה זירו',
+          category_id: null,
+          unit: null,
+          quantity: null,
+          merge_key: 'קולה זירו',
+        },
+      ],
+      error: null,
+    });
+    const repo = await importRepository();
+    const result = await repo.lookupMany('user-1', ['קולה זירו']);
+    expect(result.get('קולה זירו')).toEqual({ normalizedName: 'קולה זירו', mergeKey: 'קולה זירו' });
+  });
+
+  it('omits mergeKey from the correction for a legacy row that predates the column', async () => {
+    inMock.mockResolvedValue({
+      data: [{ original_text: 'קישוא', normalized_name: null, category_id: 'cat-veg', unit: null, quantity: null }],
+      error: null,
+    });
+    const repo = await importRepository();
+    const result = await repo.lookupMany('user-1', ['קישוא']);
+    expect(result.get('קישוא')).not.toHaveProperty('mergeKey');
+  });
 });
 
 describe('learningRepository.saveCorrections', () => {
@@ -117,11 +146,23 @@ describe('learningRepository.saveCorrections', () => {
           normalized_name: null,
           unit: null,
           quantity: null,
+          merge_key: null,
           source: 'approved_ai',
         }),
       ],
       { onConflict: 'user_id,original_text' }
     );
+  });
+
+  it('writes a provided mergeKey to the merge_key column', async () => {
+    const repo = await importRepository();
+
+    await repo.saveCorrections('user-1', [
+      { originalText: 'קולה זירו', correction: { normalizedName: 'קולה זירו', mergeKey: 'קולה זירו' }, source: 'manual' },
+    ]);
+
+    const [rows] = upsertMock.mock.calls[0];
+    expect(rows[0].merge_key).toBe('קולה זירו');
   });
 
   it('sends every save from one call as a SINGLE batched upsert, never one request per row', async () => {

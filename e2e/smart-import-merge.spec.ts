@@ -172,4 +172,88 @@ test.describe('Smart Import - name cleanup + merge with existing items', () => {
     await expect(page.getByText('קישוא')).toHaveCount(1);
     await expect(page.getByText('5x')).toBeVisible();
   });
+
+  test('generic merge identity: "חלב 3%" recognizes an existing plain "חלב" as the same product and merges the import into it', async ({ page }) => {
+    await seedAuthSession(page);
+    await enableExperimentalFeatures(page);
+
+    const CAT_DAIRY = { id: 'cat-dairy', list_id: LIST_ID, user_id: USER_ID, name: 'חלב ומוצריו' };
+    let nextId = 100;
+    const items = [
+      { id: 'item-1', list_id: LIST_ID, user_id: USER_ID, category_id: CAT_DAIRY.id, name: 'חלב', is_done: false, position: 0, unit: null, notes: null },
+    ];
+    await mockListData(page, { listName: 'הרשימה שלי', ownerId: USER_ID, categories: [CAT_DAIRY], items });
+    await page.route('**/rest/v1/items*', async (route) => {
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        const created = { id: `new-item-${nextId++}`, ...body };
+        items.push(created);
+        return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(created) });
+      }
+      return route.fallback();
+    });
+
+    await page.goto('/lists');
+    await page.getByRole('button', { name: 'ייבוא חכם' }).click();
+    await page.locator('textarea').fill('חלב 3% 2');
+    await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
+    await page.getByRole('button', { name: /הוספת \d+ פריטים/ }).click();
+    await expect(page.getByRole('heading', { name: 'ייבוא חכם' })).toHaveCount(0);
+
+    // Recognized as the same product (mergeKey "חלב" for both) - the 2
+    // new rows are inserted into the SAME item's category/metadata,
+    // never a fresh, differently-categorized guess. They're inserted
+    // under the richer name ("חלב 3%" - see chooseRicherName), so they
+    // render as their own labeled row rather than retroactively
+    // relabeling the untouched pre-existing row (this module never
+    // modifies an existing row - see buildActiveItemIndex's doc
+    // comment) - two clearly, DIFFERENTLY labeled rows, not the silent
+    // same-text duplicate the "no duplicate group" guarantee guards
+    // against elsewhere in this spec.
+    await expect.poll(() => items.length).toBe(3);
+    for (const item of items.slice(1)) {
+      expect(item.name).toBe('חלב 3%');
+      expect(item.category_id).toBe(CAT_DAIRY.id);
+    }
+
+    await page.goto('/');
+    await expect(page.getByText('חלב', { exact: true })).toBeVisible();
+    await expect(page.getByText('חלב 3%')).toBeVisible();
+    await expect(page.getByText('2x')).toBeVisible();
+  });
+
+  test('generic merge identity: soy milk never merges into an existing plain "חלב" - a genuinely different product', async ({ page }) => {
+    await seedAuthSession(page);
+    await enableExperimentalFeatures(page);
+
+    const CAT_DAIRY = { id: 'cat-dairy', list_id: LIST_ID, user_id: USER_ID, name: 'חלב ומוצריו' };
+    let nextId = 100;
+    const items = [
+      { id: 'item-1', list_id: LIST_ID, user_id: USER_ID, category_id: CAT_DAIRY.id, name: 'חלב', is_done: false, position: 0, unit: null, notes: null },
+    ];
+    await mockListData(page, { listName: 'הרשימה שלי', ownerId: USER_ID, categories: [CAT_DAIRY], items });
+    await page.route('**/rest/v1/items*', async (route) => {
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}');
+        const created = { id: `new-item-${nextId++}`, ...body };
+        items.push(created);
+        return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(created) });
+      }
+      return route.fallback();
+    });
+
+    await page.goto('/lists');
+    await page.getByRole('button', { name: 'ייבוא חכם' }).click();
+    await page.locator('textarea').fill('חלב סויה');
+    await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
+    await page.getByRole('button', { name: /הוספת \d+ פריטים/ }).click();
+    await expect(page.getByRole('heading', { name: 'ייבוא חכם' })).toHaveCount(0);
+
+    // A genuinely new row, never merged into the existing plain "חלב".
+    await expect.poll(() => items.length).toBe(2);
+
+    await page.goto('/');
+    await expect(page.getByText('חלב', { exact: true })).toBeVisible();
+    await expect(page.getByText('חלב סויה')).toBeVisible();
+  });
 });

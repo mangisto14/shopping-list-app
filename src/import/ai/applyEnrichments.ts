@@ -13,7 +13,22 @@
 // Kept as a small, independently testable pure function rather than
 // inline in ImportService, since this is where "never silently apply
 // a low-confidence guess" is actually enforced.
+//
+// Also the one place that keeps `mergeKey` (the generic merge identity
+// - see semantic/mergeKey.ts) in sync with `name`: every candidate
+// leaving this function gets `mergeKey` derived fresh from its
+// (possibly just-renamed) `name`, UNLESS the stage's own enrichment
+// supplies an explicit override (only Learning Lookup ever does -
+// see learning/buildEnrichments.ts). This runs on every candidate,
+// including ones this stage's enrichments never touched, so a name
+// change from an EARLIER stage still gets its mergeKey refreshed here
+// too - never gated behind "did this specific stage suggest anything".
 import type { AiItemEnrichment, ImportItemCandidate } from '../types';
+import { computeMergeKey } from '../semantic/mergeKey';
+
+function withMergeKey(candidate: ImportItemCandidate, learnedMergeKey?: string): ImportItemCandidate {
+  return { ...candidate, mergeKey: learnedMergeKey ?? computeMergeKey(candidate.name) };
+}
 
 export function applyAiEnrichments(
   candidates: ImportItemCandidate[],
@@ -23,7 +38,7 @@ export function applyAiEnrichments(
 
   return candidates.map((candidate) => {
     const enrichment = enrichmentByCandidateId.get(candidate.id);
-    if (!enrichment) return candidate;
+    if (!enrichment) return withMergeKey(candidate);
 
     const next: ImportItemCandidate = { ...candidate };
     const aiSuggestions: NonNullable<ImportItemCandidate['aiSuggestions']> = { ...candidate.aiSuggestions };
@@ -67,6 +82,6 @@ export function applyAiEnrichments(
     if (enrichment.ambiguous) next.aiAmbiguous = true;
     if (enrichment.duplicateOfCandidateId) next.aiDuplicateOfCandidateId = enrichment.duplicateOfCandidateId;
 
-    return next;
+    return withMergeKey(next, enrichment.mergeKey);
   });
 }
