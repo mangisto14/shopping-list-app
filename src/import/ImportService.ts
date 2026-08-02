@@ -18,7 +18,6 @@ import type {
   RawImportInput,
   ValidatedImportResult,
 } from './types';
-import type { LearningCorrection } from './learning/types';
 import type { UnresolvedItemForAi } from './ai-assistant/types';
 import { ALL_SOURCES } from './sources/registerSources';
 import { IMPORT_SOURCE_METADATA } from './sources/metadata';
@@ -31,6 +30,7 @@ import { analyzeCandidates } from './semantic/SemanticAnalyzer';
 import { detectBatchIssues } from './local/BatchHeuristics';
 import { learningRepository } from './learning/LearningRepository';
 import { correctionsToEnrichments } from './learning/buildEnrichments';
+import { buildPendingLearningSave } from './learning/buildCorrections';
 import { isUnresolved } from './ai-assistant/isUnresolved';
 import { suggestionsToEnrichments } from './ai-assistant/buildEnrichments';
 import { ALL_AI_ASSISTANT_PROVIDERS, DEFAULT_AI_ASSISTANT_PROVIDER_ID } from './ai-assistant/registerAiAssistantProviders';
@@ -287,27 +287,20 @@ export const importService: ImportServiceType = {
     // Collected first, then sent as ONE batched upsert (see
     // LearningRepository.saveCorrections) - correcting several rows in
     // a single import must not mean one network round-trip per row.
-    const corrections: { originalText: string; correction: LearningCorrection }[] = [];
+    // Per-candidate, buildPendingLearningSave decides both WHAT to
+    // learn and its source: a real edit produces a 'manual' save (the
+    // pre-existing behavior, unchanged); leaving every field exactly
+    // as Preview presented it produces an 'approved_ai' save instead
+    // of nothing, as long as some earlier stage actually resolved
+    // something to approve.
+    const saves = editedCandidates
+      .map((edited) => {
+        const original = originalById.get(edited.id);
+        return original ? buildPendingLearningSave(original, edited) : null;
+      })
+      .filter((save): save is NonNullable<typeof save> => save !== null);
 
-    for (const edited of editedCandidates) {
-      const original = originalById.get(edited.id);
-      if (!original) continue;
-
-      const correction: LearningCorrection = {};
-      if (edited.name.trim() && edited.name !== original.name) correction.normalizedName = edited.name;
-      if (edited.categoryId !== original.categoryId) correction.categoryId = edited.categoryId;
-      // Unlike category (where an explicit "no category" is itself a
-      // meaningful correction), clearing a unit isn't treated as one -
-      // there's no positive lesson to learn from "no unit", only from a
-      // genuine replacement value.
-      if (edited.unit && edited.unit !== original.unit) correction.unit = edited.unit;
-      if (edited.quantity !== original.quantity) correction.quantity = edited.quantity;
-
-      if (Object.keys(correction).length === 0) continue;
-      corrections.push({ originalText: original.rawText, correction });
-    }
-
-    if (corrections.length === 0) return;
-    await learningRepository.saveCorrections(context.userId, corrections);
+    if (saves.length === 0) return;
+    await learningRepository.saveCorrections(context.userId, saves);
   },
 };

@@ -50,7 +50,7 @@ describe('importService.saveLearning', () => {
     await importService.saveLearning(original, edited, context);
 
     expect(saveCorrections).toHaveBeenCalledWith('user-1', [
-      { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' } },
+      { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' }, source: 'manual' },
     ]);
   });
 
@@ -83,8 +83,8 @@ describe('importService.saveLearning', () => {
 
     expect(saveCorrections).toHaveBeenCalledTimes(1);
     expect(saveCorrections).toHaveBeenCalledWith('user-1', [
-      { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' } },
-      { originalText: 'חלב', correction: { unit: 'ליטר' } },
+      { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' }, source: 'manual' },
+      { originalText: 'חלב', correction: { unit: 'ליטר' }, source: 'manual' },
     ]);
   });
 
@@ -97,7 +97,9 @@ describe('importService.saveLearning', () => {
 
     await importService.saveLearning(original, edited, context);
 
-    expect(saveCorrections).toHaveBeenCalledWith('user-1', [{ originalText: 'קישוא', correction: { quantity: 3 } }]);
+    expect(saveCorrections).toHaveBeenCalledWith('user-1', [
+      { originalText: 'קישוא', correction: { quantity: 3 }, source: 'manual' },
+    ]);
   });
 
   it('learns an explicit "no category" correction, but not clearing a unit', async () => {
@@ -109,7 +111,65 @@ describe('importService.saveLearning', () => {
 
     await importService.saveLearning(original, edited, context);
 
-    expect(saveCorrections).toHaveBeenCalledWith('user-1', [{ originalText: 'קישוא', correction: { categoryId: null } }]);
+    expect(saveCorrections).toHaveBeenCalledWith('user-1', [
+      { originalText: 'קישוא', correction: { categoryId: null }, source: 'manual' },
+    ]);
+  });
+
+  describe('automatic learning from approvals (no edits, but a stage resolved something)', () => {
+    it('scenario: AI resolves קישוא -> Vegetables, user accepts without edits -> approved_ai save', async () => {
+      const saveCorrections = mockLearningRepository();
+      const { importService } = await import('../ImportService');
+
+      const pipelineOutput = candidate({
+        id: 'c1',
+        categoryId: 'cat-fruit',
+        categoryName: 'פירות',
+        aiSuggestions: { category: { confidence: 'medium' } },
+      });
+      const original = [pipelineOutput];
+      const edited = [{ ...pipelineOutput }]; // untouched by the user
+
+      await importService.saveLearning(original, edited, context);
+
+      expect(saveCorrections).toHaveBeenCalledWith('user-1', [
+        { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' }, source: 'approved_ai' },
+      ]);
+    });
+
+    it('a manual edit on one candidate and an untouched-but-resolved candidate in the same import both save, correctly tagged', async () => {
+      const saveCorrections = mockLearningRepository();
+      const { importService } = await import('../ImportService');
+
+      const resolvedButUntouched = candidate({
+        id: 'c1',
+        rawText: 'קישוא',
+        categoryId: 'cat-fruit',
+        categoryName: 'פירות',
+        aiSuggestions: { category: { confidence: 'medium' } },
+      });
+      const editedManually = candidate({ id: 'c2', rawText: 'חלב', unit: null });
+
+      const original = [resolvedButUntouched, editedManually];
+      const edited = [{ ...resolvedButUntouched }, { ...editedManually, unit: 'ליטר' }];
+
+      await importService.saveLearning(original, edited, context);
+
+      expect(saveCorrections).toHaveBeenCalledWith('user-1', [
+        { originalText: 'קישוא', correction: { categoryId: 'cat-fruit' }, source: 'approved_ai' },
+        { originalText: 'חלב', correction: { unit: 'ליטר' }, source: 'manual' },
+      ]);
+    });
+
+    it('does not save anything for a candidate that was both unmodified AND never resolved by any stage', async () => {
+      const saveCorrections = mockLearningRepository();
+      const { importService } = await import('../ImportService');
+
+      const untouched = candidate({ id: 'c1', name: 'קישוא' }); // no aiSuggestions at all
+      await importService.saveLearning([untouched], [{ ...untouched }], context);
+
+      expect(saveCorrections).not.toHaveBeenCalled();
+    });
   });
 
   it('does nothing without a userId in context', async () => {

@@ -587,6 +587,38 @@ Fixed by giving `commit()` an additional, optional `existingItems` parameter (`E
 
 tsc/build/lint clean. 149 Vitest tests pass (14 new). Full Playwright suite passes, including all 13 Smart Import specs (9 pre-existing, unchanged, + 4 new).
 
+## Automatic learning from user approvals (implemented)
+
+Closed the other half of the learning loop. Previously `user_import_learning` was written to only when the user *edited* a candidate before confirming - an AI/learning suggestion the user accepted exactly as presented taught the system nothing, so the same unresolved item would hit the AI Assistant again on every future import until the user happened to correct it once.
+
+### Decision logic (`src/import/learning/buildCorrections.ts`)
+
+- `wasCandidateModified(original, edited)` - true if any of `name`, `categoryId`, `quantity`, `unit`, or `notes` differs between the pipeline's pre-Preview output and what the user actually confirmed. `notes` has no learnable column (see below) but still participates in this check - a notes-only edit must never be mistaken for an unedited approval.
+- `buildManualCorrection(original, edited)` - unchanged from before this feature: the pre-existing field-diff logic, now just given a name.
+- `buildApprovedCorrection(candidate)` - for an *unmodified* candidate, looks at which fields some pipeline stage actually **auto-applied** (present in `aiSuggestions[field]` **and** the matching `aiPending<Field>` is absent, i.e. high/medium confidence, not a still-pending low-confidence guess never engaged with). Only those fields are learned - a suggestion the user never had to act on because it was too low-confidence to auto-apply is not "approved" by simply not touching it.
+- `buildPendingLearningSave(original, edited)` - the single entry point `ImportService.saveLearning` now calls per candidate: modified → manual correction (`source: 'manual'`); unmodified but something was resolved → approved correction (`source: 'approved_ai'`); neither → `null` (nothing to save). Returns `null` whenever the resulting correction object would be empty (e.g. modified but only `notes` changed - still no learnable diff).
+
+### Source-tagged, priority-checked writes (`LearningRepository.saveCorrections`)
+
+`user_import_learning` gained a `source text not null default 'manual'` column (migration `20260802140000_user_import_learning_source.sql`, `check (source in ('manual', 'approved_ai'))`) - every pre-existing row genuinely was a manual correction, by construction, so the default backfills correctly with no data migration needed.
+
+Priority: `manual (2) > approved_ai (1)`. Before upserting, `saveCorrections` now runs one batched `select(original_text, source)` for whatever rows already exist among the batch's texts, then filters out any save whose own priority is lower than the existing row's - so an `approved_ai` save can never clobber an existing `manual` row, while a same-tier save (manual-over-manual, approved_ai-over-approved_ai) is always allowed, since a user re-correcting their own prior correction is normal and must not be permanently blocked. A legacy row with no `source` value is treated as `manual` for this check, for the same "every old row was manual" reason the migration's default does. This is still exactly **one** upsert statement - priority-losing entries are dropped from the payload beforehand, never written and reverted.
+
+While rebuilding this write path, a latent pre-existing bug surfaced: two saves in the same batch that normalize to the same text (e.g. two candidates merging into the same existing shopping-list item) would have hit Postgres's "`ON CONFLICT`... cannot affect row a second time" error on the bulk upsert, since a single multi-row upsert can't target the same conflict key twice. Fixed with a `Map`-based within-batch dedup (later entry wins) before building the upsert payload - unrelated to source-tagging itself, but only reachable through the same code path.
+
+`lookupMany` is completely unchanged - it never selects or reads the `source` column, so a manual correction and an approved AI result are indistinguishable at lookup time, exactly as intended.
+
+### Tests
+
+- `src/import/learning/__tests__/buildCorrections.test.ts` (13): modified-detection for every field including notes-only, manual-correction field diffing, approved-correction's aiSuggestions/aiPending gating, and the combined entry point's four outcomes.
+- `src/import/learning/__tests__/LearningRepository.test.ts` (18, rewritten): existing lookup/batching/caching coverage plus new "write priority" (6 tests: same-tier always allowed both directions, cross-tier blocked/allowed correctly, legacy null-source treated as manual, a mixed batch drops only the blocked entry) and "within-batch deduplication" (1 test) blocks.
+- `src/import/__tests__/ImportService.saveLearning.test.ts`: existing cases updated to assert `source: 'manual'`; new block covering the approved_ai scenario, a mixed manual+approved_ai batch tagged correctly, and confirming a candidate that's both unmodified and never resolved by any stage still saves nothing.
+- `e2e/smart-import-ai-assistant.spec.ts` (4, was 3): the "accept as-is" test now asserts an `approved_ai` row is written instead of asserting nothing is; the manual-correction test now also asserts `source: 'manual'`; a new test seeds an existing **manual** learning row, confirms the learning lookup resolves the item (AI Assistant never called) and the user accepts it as-is, then asserts the resulting approved_ai save attempt is silently blocked - no write reaches the table at all, since `saveCorrections` drops it before ever calling upsert.
+
+### Validation
+
+tsc/build/lint clean. 174 Vitest tests pass (23 new). Full Playwright suite passes (64 specs, including all 17 Smart Import specs); one unrelated pre-existing swipe-gesture flake in `dev-settings.spec.ts`, confirmed by isolated re-run to pass and to touch no file this feature changed.
+
 ## Future enhancement (not part of Phase 1): optional AI Review stage
 
 **Not implemented. Not scheduled. This section exists only to confirm the Phase 1 architecture reserves room for it, so adding it later doesn't force a redesign.**

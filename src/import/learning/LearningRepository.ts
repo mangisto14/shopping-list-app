@@ -11,7 +11,7 @@
 // mirrors exactly how the migration's own column comment describes it.
 import { supabase } from '../../supabase/client';
 import { normalizeForComparison } from '../ai/textUtils';
-import type { LearningCorrection } from './types';
+import type { LearningCorrection, LearningSource, PendingLearningSave } from './types';
 
 interface LearningRow {
   original_text: string;
@@ -20,6 +20,14 @@ interface LearningRow {
   unit: string | null;
   quantity: number | null;
 }
+
+// Higher number wins. A save may overwrite an existing row only when
+// its own priority is >= the existing row's - so 'approved_ai' (1) can
+// never clobber an existing 'manual' (2) row, but a same-tier save
+// (manual-over-manual, approved_ai-over-approved_ai) is always allowed
+// - a user correcting their own prior correction again is completely
+// normal and must not be permanently blocked by this rule.
+const SOURCE_PRIORITY: Record<LearningSource, number> = { approved_ai: 1, manual: 2 };
 
 function rowToCorrection(row: LearningRow): LearningCorrection {
   const correction: LearningCorrection = {};
@@ -96,35 +104,74 @@ export const learningRepository = {
     return result;
   },
 
-  // Upserts every correction from one import in a SINGLE request
-  // (PostgREST accepts an array for a bulk upsert) rather than one
-  // round-trip per corrected row - the same "never call one item at a
-  // time" discipline STEP7 asks of the AI Assistant, applied here too.
-  // Keyed by (user_id, original_text) - a later correction for the same
-  // phrase replaces the earlier one, matching the migration's unique
-  // constraint. Only ever called with fields that actually changed
-  // (see ImportService.saveLearning) - never writes an unchanged AI/
-  // rule-based suggestion.
-  async saveCorrections(
-    userId: string,
-    corrections: { originalText: string; correction: LearningCorrection }[]
-  ): Promise<void> {
-    const entries = corrections
-      .map(({ originalText, correction }) => {
-        const normalizedText = normalizeForComparison(originalText);
-        return normalizedText ? { normalizedText, correction } : null;
+  // Upserts every save from one import in a SINGLE request (PostgREST
+  // accepts an array for a bulk upsert) rather than one round-trip per
+  // row - the same "never call one item at a time" discipline STEP7
+  // asks of the AI Assistant, applied here too. Keyed by (user_id,
+  // original_text), matching the migration's unique constraint.
+  //
+  // Priority-checked against whatever's already stored (one batched
+  // SELECT, same discipline) so a lower-priority 'approved_ai' save can
+  // never silently overwrite an existing 'manual' row - see
+  // SOURCE_PRIORITY above. This is still only ONE upsert statement:
+  // priority-losing entries are filtered out beforehand, not written
+  // and then reverted.
+  async saveCorrections(userId: string, saves: PendingLearningSave[]): Promise<void> {
+    const normalized = saves
+      .map((save) => {
+        const normalizedText = normalizeForComparison(save.originalText);
+        return normalizedText ? { ...save, normalizedText } : null;
       })
-      .filter((entry): entry is { normalizedText: string; correction: LearningCorrection } => entry !== null);
+      .filter((save): save is PendingLearningSave & { normalizedText: string } => save !== null);
 
-    if (entries.length === 0) return;
+    if (normalized.length === 0) return;
 
-    const rows = entries.map(({ normalizedText, correction }) => ({
+    // Two entries in the same batch can normalize to the same text
+    // (e.g. two candidates that both merge into one existing shopping-
+    // list item - see ImportService.commit's own merge logic). A
+    // single multi-row upsert statement can't target the same conflict
+    // key twice, so the later one wins here - same "a later save
+    // replaces an earlier one" rule already applied across separate
+    // imports, just applied within one batch too.
+    const byText = new Map<string, PendingLearningSave & { normalizedText: string }>();
+    for (const save of normalized) byText.set(save.normalizedText, save);
+    const deduped = [...byText.values()];
+
+    const { data: existingRows, error: selectError } = await supabase
+      .from('user_import_learning')
+      .select('original_text, source')
+      .eq('user_id', userId)
+      .in('original_text', deduped.map((save) => save.normalizedText));
+
+    if (selectError) {
+      console.error('Smart Import: checking existing learning priority failed, skipping this save', selectError);
+      return;
+    }
+
+    const existingSourceByText = new Map<string, LearningSource>();
+    for (const row of (existingRows ?? []) as { original_text: string; source: LearningSource | null }[]) {
+      // A row from before this feature existed (source column just
+      // added, no value backfilled yet in a not-yet-migrated
+      // environment) really was a manual correction, by construction -
+      // that's the only kind that could have been saved back then.
+      existingSourceByText.set(row.original_text, row.source ?? 'manual');
+    }
+
+    const toUpsert = deduped.filter((save) => {
+      const existingSource = existingSourceByText.get(save.normalizedText);
+      return !existingSource || SOURCE_PRIORITY[save.source] >= SOURCE_PRIORITY[existingSource];
+    });
+
+    if (toUpsert.length === 0) return;
+
+    const rows = toUpsert.map(({ normalizedText, correction, source }) => ({
       user_id: userId,
       original_text: normalizedText,
       normalized_name: correction.normalizedName ?? null,
       category_id: correction.categoryId ?? null,
       unit: correction.unit ?? null,
       quantity: correction.quantity ?? null,
+      source,
       updated_at: new Date().toISOString(),
     }));
 
@@ -135,7 +182,7 @@ export const learningRepository = {
       return;
     }
 
-    for (const { normalizedText, correction } of entries) {
+    for (const { normalizedText, correction } of toUpsert) {
       rememberInCache(userId, normalizedText, correction);
     }
   },
