@@ -76,6 +76,27 @@ export function analyzeCandidate(candidate: ImportItemCandidate, context: Import
   const renameConfidence = renameConfidenceForTier(match.matchTier);
   if (renameConfidence && match.canonicalName && match.canonicalName !== candidate.name) {
     enrichment.name = { value: match.canonicalName, confidence: renameConfidence, reason: 'Recognized product name' };
+  } else if ((parsed.quantityFound || parsed.unitFound) && parsed.remainingText && parsed.remainingText !== candidate.name) {
+    // The product isn't recognized by the knowledge base (unknown to
+    // KNOWLEDGE_PRODUCTS entirely, or only a partial/keyword match too
+    // weak to justify a full canonicalization - see the tier doc
+    // comment above), but a quantity/unit WAS genuinely parsed out of
+    // the raw text. "The stored item name must never contain embedded
+    // quantity values" is unconditional - it doesn't depend on the
+    // product being recognized - so the merely-cleaned (quantity/unit
+    // stripped, whitespace-normalized) text is still used as a
+    // fallback rename, at high confidence: this isn't a guess about
+    // what the product is, it's a mechanical fact about what's left
+    // over after removing the exact tokens `parsed` already found.
+    //
+    // Gated on quantityFound/unitFound specifically (not just "does
+    // remainingText differ from candidate.name") so this can never
+    // fire when parseQuantity found nothing to strip - e.g. a line
+    // RuleBasedNormalizer already split into name + notes ("חלב - קנה
+    // את הדל שומן") re-parsed here from the full original rawText
+    // (which still includes the notes suffix) must not have that notes
+    // text reintroduced into the name.
+    enrichment.name = { value: parsed.remainingText, confidence: 'high', reason: 'Quantity/unit removed from name' };
   }
 
   if (!candidate.categoryId && match.categoryName && match.categoryConfidence) {

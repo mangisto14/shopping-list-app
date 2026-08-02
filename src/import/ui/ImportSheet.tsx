@@ -129,7 +129,19 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
     if (!result) return;
     setSubmitting(true);
     try {
-      await importService.commit({ ...result, candidates }, addItem);
+      // Merges into an existing active item with the same (post-edit)
+      // name when one exists on the current list, instead of always
+      // creating a fresh one - see ImportService.commit's own doc
+      // comment for why this needs the list's real items, not just
+      // their names.
+      const existingItemsForMerge = items.map((i) => ({
+        name: i.name,
+        categoryId: i.category_id,
+        unit: i.unit,
+        notes: i.notes,
+        isDone: i.is_done,
+      }));
+      await importService.commit({ ...result, candidates }, addItem, existingItemsForMerge);
       // Phase 2C, STEP5: diffs the pipeline's original output
       // (`result.candidates` - untouched, since `candidates` state was
       // always a separate copy updateCandidate mutates) against what

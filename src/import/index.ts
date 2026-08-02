@@ -16,4 +16,5 @@ export type {
   ValidatedImportResult,
   ValidationIssue,
   AddItemFn,
+  ExistingItemForMerge,
 } from './types';

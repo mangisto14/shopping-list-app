@@ -253,6 +253,19 @@ export type AddItemFn = (
   options?: { unit?: string | null; notes?: string | null }
 ) => Promise<boolean>;
 
+// A minimal, plain-data projection of useItems().items - just what
+// commit()'s merge-with-existing-item logic needs (see its own doc
+// comment). Deliberately its own small shape, not the app's `Item`
+// interface from useItems.ts: services in this module never import a
+// hook's types any more than they call the hook itself.
+export interface ExistingItemForMerge {
+  name: string;
+  categoryId: string | null;
+  unit: string | null;
+  notes: string | null;
+  isDone: boolean;
+}
+
 export interface ImportService {
   listSources(): Promise<{ meta: ImportSourceMeta; available: boolean }[]>;
   runImport(
@@ -260,7 +273,29 @@ export interface ImportService {
     context: ImportPipelineContext,
     seed?: RawImportInput
   ): Promise<ValidatedImportResult>;
-  commit(result: ValidatedImportResult, addItem: AddItemFn): Promise<{ committed: number; failed: number }>;
+  // `existingItems` (optional, defaults to none) enables the merge-
+  // with-existing-item behavior below; a caller that omits it just
+  // gets the previous, always-insert-new-rows behavior.
+  //
+  // Before inserting a candidate's rows, looks for an existing ACTIVE
+  // (not done) item on the list whose name matches the candidate's
+  // FINAL name (after Preview edits) once normalized. If found, the
+  // new rows are inserted using that existing item's exact name and
+  // metadata (category/unit/notes) instead of the candidate's own -
+  // this app's quantity model is "N rows sharing one name = an Nx
+  // group" (see ShoppingList.tsx's clusterByName, which groups by
+  // exact name string *within* a category section), so reusing the
+  // existing item's exact name/category is what makes the newly
+  // inserted rows actually join its existing group instead of
+  // silently starting a second, differently-styled one - rather than
+  // literally updating a `quantity` column, which does not exist on
+  // `items`. No existing row is ever modified; only which name/
+  // metadata new rows are inserted with changes.
+  commit(
+    result: ValidatedImportResult,
+    addItem: AddItemFn,
+    existingItems?: ExistingItemForMerge[]
+  ): Promise<{ committed: number; failed: number }>;
   // Phase 2C: diffs the pipeline's original output (`originalCandidates`
   // - i.e. `runImport`'s own `result.candidates`, before any user edit)
   // against what the user actually confirmed (`editedCandidates`), and

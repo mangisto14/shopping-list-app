@@ -557,6 +557,36 @@ A pure architecture review of everything Phase 2C added - no new capability, no 
 
 Validation: tsc/build/lint clean, 138 Vitest tests pass (12 new: retry behavior, batched-save behavior, `saveLearning` diff logic in isolation), full Playwright suite passes (all Smart Import specs; one unrelated pre-existing swipe-gesture flake, confirmed by isolated re-run, in `dev-settings.spec.ts` - touches no file this review changed).
 
+## Final import commit fixes (implemented)
+
+Two remaining correctness gaps, found only after the Phase 2C review, both at the very end of the pipeline.
+
+### 1. A quantity could survive inside the stored name for an unrecognized product
+
+`SemanticAnalyzer`'s rename logic (Phase 2B) only replaced `candidate.name` with a *canonical* name when the knowledge base actually recognized the product (`exact-product`/`alias`/`fuzzy` tiers). For a product the knowledge base has never heard of - e.g. "קישוא" (zucchini), deliberately absent from `knowledge/products.ts` - `matchProduct` returns tier `'none'`, so no rename ever fired, even though `parseQuantity` had *already* correctly identified and stripped a quantity/unit. The net effect: "קישוא 3" would resolve to quantity 3 correctly, but the stored `name` stayed the dirty, unstripped "קישוא 3" - the exact defect "the stored item name must never contain embedded quantity values" describes.
+
+Fixed in `SemanticAnalyzer.analyzeCandidate`: when no knowledge-base match justifies a full canonicalization, but `parseQuantity` genuinely found and stripped a quantity/unit token (`parsed.quantityFound || parsed.unitFound`), the merely-cleaned (quantity/unit removed, whitespace-normalized) text is still proposed as a high-confidence rename - not a guess about what the product *is*, just a mechanical fact about what's left over after removing tokens already found. Gated specifically on `quantityFound`/`unitFound` (not "does the cleaned text merely differ from the name") so it can never fire when nothing was actually parsed - protecting a case like `RuleBasedNormalizer` already having split off a trailing " - notes" suffix, which `SemanticAnalyzer` re-parses from the full original `rawText` and must not reintroduce into `name`.
+
+`parseQuantity.ts` also now collapses internal whitespace once, up front (`rawText.trim().replace(/\s+/g, ' ')`), so every exit path's `remainingText` is consistently normalized rather than only trimmed at the edges.
+
+### 2. Importing a product already on the list created a second, duplicate-looking group
+
+This app has no persisted `quantity` column - "Nx" is purely a *display* convention (`ShoppingList.tsx`'s `clusterByName`, grouping items by **exact name string, within a category section**). `ImportService.commit()` already represented quantity correctly (N inserted rows), but it had no way to make those new rows join an *existing* item's group: if the existing "קישוא" was stored under a different category than what Smart Import guessed (or the import's freshly-canonicalized name differed even trivially from what's already stored), the newly-inserted rows would render as a **second**, differently-styled cluster - a real, visible duplicate.
+
+Fixed by giving `commit()` an additional, optional `existingItems` parameter (`ExistingItemForMerge[]` - a minimal plain-data projection of `useItems().items`, never the hook itself). Before inserting a candidate's rows, `commit()` looks for an existing **active** (`!isDone`) item whose name matches the candidate's *final* name (after Preview edits) once normalized; if found, the new rows are inserted using that item's **exact** stored name and its category/unit/notes - never the candidate's own guessed values - so they provably join its existing group instead of starting a new one. No existing row is ever read from again or modified; this only changes which name/metadata the *new* rows are inserted with. A completed (`isDone: true`) item is never a merge target - the user is about to buy the imported item, not the one they already checked off.
+
+`ImportSheet.tsx` passes `useItems().items` (mapped to the minimal shape) into `commit()`; a caller that omits `existingItems` gets the previous always-insert-new-rows behavior unchanged.
+
+### Tests
+
+- `SemanticAnalyzer.test.ts`: "קישוא 3"/"3 קישוא" name cleanup, whitespace collapsing, no-op when nothing was parsed, and the notes-suffix regression guard.
+- `ImportService.test.ts`: a new `describe` block covering merge-found (exact name/category/unit/notes reused), case/whitespace-insensitive matching, no-match (creates normally), completed-item exclusion, edited-quantity-is-what's-used, and two candidates merging into the same existing item without ever diverging into two groups.
+- `e2e/smart-import-merge.spec.ts` (4 tests): the exact scenarios above, verified against the real Preview UI and the real grouped `/` list view (not just `ImportService` in isolation) - including polling the mocked `items` array (fed back into the GET response so a post-import page reload reflects the newly inserted rows) to confirm the resulting group shows "5x", not a duplicate "קישoא" text node.
+
+### Validation
+
+tsc/build/lint clean. 149 Vitest tests pass (14 new). Full Playwright suite passes, including all 13 Smart Import specs (9 pre-existing, unchanged, + 4 new).
+
 ## Future enhancement (not part of Phase 1): optional AI Review stage
 
 **Not implemented. Not scheduled. This section exists only to confirm the Phase 1 architecture reserves room for it, so adding it later doesn't force a redesign.**

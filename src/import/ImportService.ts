@@ -10,6 +10,7 @@
 import type {
   AddItemFn,
   AiItemEnrichment,
+  ExistingItemForMerge,
   ImportItemCandidate,
   ImportPipelineContext,
   ImportService as ImportServiceType,
@@ -25,6 +26,7 @@ import { ALL_EXTRACTORS } from './extractors/registerExtractors';
 import { ALL_NORMALIZERS, DEFAULT_NORMALIZER_ID } from './normalizers/registerNormalizers';
 import { ALL_VALIDATORS, DEFAULT_VALIDATOR_ID } from './validators/registerValidators';
 import { applyAiEnrichments } from './ai/applyEnrichments';
+import { normalizeForComparison } from './ai/textUtils';
 import { analyzeCandidates } from './semantic/SemanticAnalyzer';
 import { detectBatchIssues } from './local/BatchHeuristics';
 import { learningRepository } from './learning/LearningRepository';
@@ -32,6 +34,25 @@ import { correctionsToEnrichments } from './learning/buildEnrichments';
 import { isUnresolved } from './ai-assistant/isUnresolved';
 import { suggestionsToEnrichments } from './ai-assistant/buildEnrichments';
 import { ALL_AI_ASSISTANT_PROVIDERS, DEFAULT_AI_ASSISTANT_PROVIDER_ID } from './ai-assistant/registerAiAssistantProviders';
+
+// Only ACTIVE items are eligible merge targets - a long-since-completed
+// item shouldn't silently become the metadata source (and grouping
+// target) for a fresh import; the user is about to buy the imported
+// one, not the one they already checked off. Case/whitespace-
+// insensitive match (reusing the exact same normalizeForComparison
+// every other duplicate/match check in this module already uses) -
+// but the row(s) actually inserted use the existing item's EXACT
+// stored name, never the normalized form, since ShoppingList.tsx's
+// clusterByName groups by exact string equality.
+function buildActiveItemIndex(existingItems: ExistingItemForMerge[]): Map<string, ExistingItemForMerge> {
+  const index = new Map<string, ExistingItemForMerge>();
+  for (const item of existingItems) {
+    if (item.isDone) continue;
+    const key = normalizeForComparison(item.name);
+    if (key && !index.has(key)) index.set(key, item);
+  }
+  return index;
+}
 
 function getSource(id: ImportSourceId) {
   const source = ALL_SOURCES.find((s) => s.id === id);
@@ -215,20 +236,38 @@ export const importService: ImportServiceType = {
     };
   },
 
-  async commit(result: ValidatedImportResult, addItem: AddItemFn) {
+  async commit(result: ValidatedImportResult, addItem: AddItemFn, existingItems: ExistingItemForMerge[] = []) {
     let committed = 0;
     let failed = 0;
 
+    const activeItemByName = buildActiveItemIndex(existingItems);
+
     for (const candidate of result.candidates) {
       if (!candidate.included) continue;
+
+      // Merge with an existing active item, if this candidate's FINAL
+      // name (after Preview edits - `candidate` here is always
+      // caller-supplied post-edit state, never the pipeline's original
+      // output) matches one. Reusing its exact name/category/unit/
+      // notes is what makes the newly inserted rows actually join its
+      // existing "Nx" group (see buildActiveItemIndex's doc comment)
+      // instead of starting a second, duplicate-looking one - no
+      // existing row is read from again after this or modified.
+      const match = activeItemByName.get(normalizeForComparison(candidate.name));
+      const name = match ? match.name : candidate.name;
+      const categoryId = match ? match.categoryId : candidate.categoryId;
+      const unit = match ? match.unit : candidate.unit;
+      const notes = match ? match.notes : candidate.notes;
+
       // "Quantity" reuses this app's existing convention (repeat-insert
       // N times) rather than a persisted quantity column - same
-      // pattern QuickAddBar's stepper already uses via useItems().
+      // pattern QuickAddBar's stepper already uses via useItems(). This
+      // is also how a merge "increases the existing quantity": every
+      // one of these `candidate.quantity` new rows joins the matched
+      // item's group, growing its displayed Nx count by exactly that
+      // amount.
       for (let i = 0; i < candidate.quantity; i++) {
-        const success = await addItem(candidate.name, candidate.categoryId, {
-          unit: candidate.unit,
-          notes: candidate.notes,
-        });
+        const success = await addItem(name, categoryId, { unit, notes });
         if (success) committed += 1;
         else failed += 1;
       }

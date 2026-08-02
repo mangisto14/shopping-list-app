@@ -40,7 +40,11 @@ function notFound(remainingText: string): ParsedQuantity {
 }
 
 export function parseQuantity(rawText: string): ParsedQuantity {
-  const line = rawText.trim();
+  // Collapsed once, up front, so every exit path below (multiplier
+  // regexes, token split/join, and the no-match fallback alike)
+  // returns an already whitespace-normalized `remainingText` - never
+  // just the edges trimmed while stray internal double-spaces survive.
+  const line = rawText.trim().replace(/\s+/g, ' ');
   if (!line) return notFound(line);
 
   const leadingMultiplier = line.match(LEADING_MULTIPLIER_RE);

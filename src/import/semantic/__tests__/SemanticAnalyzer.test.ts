@@ -94,6 +94,55 @@ describe('analyzeCandidate - low-confidence unit fallback', () => {
   });
 });
 
+describe('analyzeCandidate - final import commit fixes: name cleanup for unrecognized products', () => {
+  it('"קישוא 3" -> name cleaned to קישוא, quantity 3, even though קישוא is unknown to the knowledge base', () => {
+    // קישוא (zucchini) is deliberately absent from knowledge/products.ts
+    // - RuleBasedNormalizer's own regexes can't parse a trailing bare
+    // quantity either, so this candidate arrives here with the raw,
+    // unstripped line as its name.
+    const c = candidate({ id: 'c1', rawText: 'קישוא 3', name: 'קישוא 3', quantity: 1 });
+    const enrichment = analyzeCandidate(c, emptyContext);
+    expect(enrichment.quantity).toMatchObject({ value: 3, confidence: 'high' });
+    expect(enrichment.name).toMatchObject({ value: 'קישוא', confidence: 'high' });
+  });
+
+  it('"3 קישוא" (leading form) also gets its name cleaned', () => {
+    const c = candidate({ id: 'c1', rawText: '3 קישוא', name: '3 קישוא', quantity: 1 });
+    const enrichment = analyzeCandidate(c, emptyContext);
+    expect(enrichment.quantity).toMatchObject({ value: 3, confidence: 'high' });
+    expect(enrichment.name).toMatchObject({ value: 'קישוא', confidence: 'high' });
+  });
+
+  it('collapses stray internal whitespace left over after stripping the quantity', () => {
+    const c = candidate({ id: 'c1', rawText: 'קישוא    3', name: 'קישוא    3', quantity: 1 });
+    const enrichment = analyzeCandidate(c, emptyContext);
+    expect(enrichment.name).toMatchObject({ value: 'קישוא', confidence: 'high' });
+  });
+
+  it('does not emit a name enrichment when there was no quantity/unit to strip in the first place', () => {
+    const c = candidate({ id: 'c1', rawText: 'קישוא', name: 'קישוא' });
+    const enrichment = analyzeCandidate(c, emptyContext);
+    expect(enrichment.name).toBeUndefined();
+  });
+
+  it('regression guard: never reintroduces a notes suffix RuleBasedNormalizer already split off', () => {
+    // RuleBasedNormalizer already separated this into name="חלב",
+    // notes="קנה את הדל שומן" before this stage ever runs - but
+    // `rawText` (re-parsed here) still contains the full original
+    // line, including the notes suffix. parseQuantity finds no
+    // quantity in it (quantityFound stays false), so the fallback
+    // rename must NOT fire and reintroduce the notes text into name.
+    const c = candidate({
+      id: 'c1',
+      rawText: 'חלב - קנה את הדל שומן',
+      name: 'חלב',
+      notes: 'קנה את הדל שומן',
+    });
+    const enrichment = analyzeCandidate(c, emptyContext);
+    expect(enrichment.name).toBeUndefined();
+  });
+});
+
 describe('analyzeCandidates - batch filtering', () => {
   it('omits candidates with nothing meaningful to add', () => {
     const c1 = candidate({ id: 'c1', rawText: 'קסדת אופניים', name: 'קסדת אופניים' });
