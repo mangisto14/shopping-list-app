@@ -54,25 +54,15 @@ const SLIDE_OUT_PX = 420;
 // Total: 500 delay + 220 slide + 500 hold + 220 return = 1440ms.
 //
 // The reveal distance is deliberately NOT its own arbitrary constant -
-// it reuses MAX_DRAG_PX, an existing geometry constant, rather than
-// inventing a new pixel value. This used to be a much smaller hardcoded
-// value (18px), which never came close to exposing the delete icon.
-//
-// It specifically does NOT use swipeSettings.revealThreshold (80px by
-// default) here, even though that's the position a real manual swipe
-// snaps open to: this design's delete icon is centered within the
-// FULL MAX_DRAG_PX-wide red action panel (see the centered `flex
-// items-center justify-center` panel below), not pinned near its left
-// edge like the pre-redesign layout was. Measured directly in-browser:
-// at revealThreshold's default of 80px, the icon sits entirely outside
-// the revealed window and is still fully hidden under the row - only
-// revealing the full panel width (MAX_DRAG_PX) reliably uncovers it
-// regardless of exactly where within the panel it's centered. This is
-// a pre-existing gap in the redesign itself (a real partial swipe that
-// snaps to revealThreshold has the exact same problem) that this hint
-// fix does not attempt to solve - only the automatic one-time hint's
-// own target distance changes here; revealThreshold, DELETE_THRESHOLD_PX,
-// and normal manual swipe behavior are all untouched.
+// it reuses swipeSettings.revealThreshold (clamped to MAX_DRAG_PX, same
+// as a real drag), the exact position a manual swipe snaps open to.
+// This used to be a much smaller hardcoded value (18px), which never
+// came close to exposing the delete icon. The icon is pinned to the
+// panel's own left edge (see the delete-action panel below, `left-3.5`
+// inside a panel that starts at the row's own rest-position left edge)
+// rather than centered within the full MAX_DRAG_PX-wide panel, so a
+// reveal of just revealThreshold (80px default) - far short of the
+// full panel width - is already enough to clear it.
 const ENTRY_HINT_DELAY_MS = 500;
 const ENTRY_HINT_HOLD_MS = 500;
 const ENTRY_HINT_TRANSITION_MS = 220;
@@ -158,7 +148,7 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
 
     const delayTimer = window.setTimeout(() => {
       setHinting(true);
-      setTranslateX(MAX_DRAG_PX);
+      setTranslateX(Math.min(MAX_DRAG_PX, swipeSettings.revealThreshold));
       const holdTimer = window.setTimeout(() => {
         setTranslateX(0);
         window.setTimeout(() => setHinting(false), ENTRY_HINT_TRANSITION_MS);
@@ -413,16 +403,21 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
           true first/last row's corners, so nothing here needs its own
           radius. */}
       <div
-        className={`absolute inset-y-0 left-0 flex items-center justify-center transition-colors duration-150 ${
+        className={`absolute inset-y-0 left-0 transition-colors duration-150 ${
           pastThreshold ? 'bg-red-600' : 'bg-red-500'
         }`}
         style={{ width: MAX_DRAG_PX }}
       >
+        {/* Pinned to the panel's own left edge (not centered within the
+            full MAX_DRAG_PX width) - the icon becomes visible with a
+            short reveal instead of needing the panel's full width
+            uncovered. See ENTRY_HINT's own doc comment above for how
+            this interacts with the discovery hint's reveal distance. */}
         <button
           onClick={triggerDelete}
           aria-label="מחיקת פריט"
-          className="flex flex-col items-center gap-0.5 text-white"
-          style={{ opacity: revealProgress, transform: `scale(${iconScale})` }}
+          className="absolute left-3.5 top-1/2 flex flex-col items-center gap-0.5 text-white"
+          style={{ opacity: revealProgress, transform: `translateY(-50%) scale(${iconScale})` }}
         >
           <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
             <path

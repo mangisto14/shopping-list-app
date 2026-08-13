@@ -118,14 +118,12 @@ test('the automatic discovery hint reveals far enough for the delete icon to be 
   const row = page.locator('[data-testid="item-row"]').nth(0);
   const deleteButton = page.getByRole('button', { name: 'מחיקת פריט' });
 
-  // The hint reveals to MAX_DRAG_PX (220px) - the full width of the red
-  // action panel - not swipeSettings.revealThreshold (80px default).
-  // Measured directly: with this design's delete icon CENTERED within
-  // the full panel (not pinned near its left edge like the pre-redesign
-  // layout), revealThreshold's 80px leaves the icon entirely hidden
-  // under the row - only revealing the full panel width reliably
-  // exposes it regardless of exactly where within the panel it sits.
-  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 220, 0\)/, { timeout: 1500 });
+  // The hint reveals to swipeSettings.revealThreshold (80px default) -
+  // the exact position a real manual swipe snaps open to. The delete
+  // icon is pinned to the panel's own left edge (not centered within
+  // the full MAX_DRAG_PX-wide panel), so this reveal distance is
+  // already enough to clear it.
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 80, 0\)/, { timeout: 1500 });
 
   // Geometry check: the delete button's bounding box must sit entirely
   // to the left of the row's now-shifted left edge - i.e. genuinely
@@ -139,8 +137,7 @@ test('the automatic discovery hint reveals far enough for the delete icon to be 
 
   // Not just present in the DOM - genuinely opaque. revealProgress
   // (which drives the icon's opacity/scale) is min(1, translateX /
-  // revealThreshold), which is already 1 well before 220px given the
-  // default revealThreshold of 80px.
+  // revealThreshold), which reaches exactly 1 at revealThreshold.
   const opacity = await deleteButton.evaluate((el) => Number(getComputedStyle(el).opacity));
   expect(opacity).toBeCloseTo(1, 1);
 
