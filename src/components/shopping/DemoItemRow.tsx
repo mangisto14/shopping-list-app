@@ -54,32 +54,40 @@ export default function DemoItemRow({ label, onFinished }: DemoItemRowProps) {
   return (
     <div
       aria-hidden="true"
-      className="relative transition-opacity ease-in-out"
+      className="transition-opacity ease-in-out"
       style={{ opacity: visible ? 1 : 0, transitionDuration: `${FADE_MS}ms` }}
     >
-      <div className="absolute inset-y-0 left-0 flex items-center justify-center rounded-xl bg-red-500" style={{ width: 220 }}>
-        <div className="flex flex-col items-center gap-0.5 text-white px-4" style={{ opacity: revealProgress }}>
-          <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <path
-              d="M2.5 5h13M6.5 5V3.5A1.5 1.5 0 018 2h2a1.5 1.5 0 011.5 1.5V5M4.5 5l1 10.5A1.5 1.5 0 007 17h4a1.5 1.5 0 001.5-1.5L13.5 5"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-          </svg>
-          <span className="text-[10px] font-bold">מחיקה</span>
+      {/* Same grouped-inset shape as a real CategorySection group (one
+          rounded white container, overflow-hidden), just holding a
+          single row instead of many - matches ItemCard's flush-row
+          treatment: no radius/border/shadow on the row itself, only on
+          this outer boundary. No permanent hint strip - the discovery
+          animation below is the only teaching mechanism, matching
+          ItemCard. */}
+      <div className="relative bg-white rounded-2xl overflow-hidden">
+        <div className="absolute inset-y-0 left-0 flex items-center justify-center bg-red-500" style={{ width: 220 }}>
+          <div className="flex flex-col items-center gap-0.5 text-white" style={{ opacity: revealProgress }}>
+            <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <path
+                d="M2.5 5h13M6.5 5V3.5A1.5 1.5 0 018 2h2a1.5 1.5 0 011.5 1.5V5M4.5 5l1 10.5A1.5 1.5 0 007 17h4a1.5 1.5 0 001.5-1.5L13.5 5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+            <span className="text-[10px] font-bold">מחיקה</span>
+          </div>
         </div>
-      </div>
 
-      <div
-        style={{ transform: `translateX(${translateX}px)`, transition: `transform ${ENTRY_TRANSITION_MS}ms ease-out` }}
-        className="relative flex items-center gap-2.5 overflow-hidden bg-white rounded-xl px-3 py-2 min-h-[52px] border border-gray-100 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_10px_rgba(15,23,42,0.05)]"
-      >
-        <span className="absolute inset-y-0 left-0 w-[2px] bg-red-500" aria-hidden="true" />
-        <span className="flex-shrink-0 w-1 self-stretch rounded-full bg-gray-200" aria-hidden="true" />
-        <span className="flex-shrink-0 w-[22px] h-[22px] rounded-full border-2 border-gray-300" />
-        <span className="flex-1 min-w-0 truncate text-[15px] font-semibold text-gray-400">{label}</span>
-        <span className="flex-shrink-0 text-[12px] font-medium text-gray-400">1x</span>
+        <div
+          style={{ transform: `translateX(${translateX}px)`, transition: `transform ${ENTRY_TRANSITION_MS}ms ease-out` }}
+          className="relative flex items-center gap-2.5 bg-white px-3 py-2 min-h-[52px]"
+        >
+          <span className="flex-shrink-0 w-2 h-2 rounded-full bg-gray-200" aria-hidden="true" />
+          <span className="flex-shrink-0 w-[22px] h-[22px] rounded-full border-2 border-gray-300" />
+          <span className="flex-1 min-w-0 truncate text-[15px] font-semibold text-gray-400">{label}</span>
+          <span className="flex-shrink-0 text-[12px] font-medium text-gray-400">1x</span>
+        </div>
       </div>
     </div>
   );

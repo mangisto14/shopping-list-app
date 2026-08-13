@@ -59,6 +59,17 @@ test('changing revealThreshold applies immediately, and survives a client-side n
   await page.getByRole('link', { name: 'רשימת קניות' }).click();
   await expect(page).toHaveURL('/');
 
+  // The nav menu (a Headless UI Popover) doesn't close itself just
+  // because an internal <Link> was clicked and the route changed
+  // underneath it - it only closes on an outside click, the toggle
+  // button, or Escape. Left as-is, its still-open (fully opaque,
+  // absolutely positioned, z-10) panel keeps intercepting pointer
+  // events for whatever now renders underneath its screen area.
+  // Escape reliably closes it, and its `transition` prop then
+  // unmounts the panel once the close animation finishes.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('link', { name: 'רשימת קניות' })).toHaveCount(0);
+
   expect(await page.evaluate(() => (window as unknown as { __e2eMarker?: string }).__e2eMarker)).toBe('still-here');
 
   // Second row - the first plays a one-time auto entry-hint animation

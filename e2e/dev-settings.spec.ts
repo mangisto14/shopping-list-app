@@ -103,6 +103,52 @@ test('a custom autoCloseDelay from dev settings closes an open row on its own', 
   await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 0, 0\)/, { timeout: 2000 });
 });
 
+test('the automatic discovery hint reveals far enough for the delete icon to be genuinely visible, then returns to rest', async ({ page }) => {
+  await seedAuthSession(page);
+  await mockListData(page, {
+    categories: [{ id: CAT_DAIRY, list_id: LIST_ID, user_id: USER_ID, name: 'מוצרי חלב' }],
+    items: [
+      { id: 'e2e-item-1', list_id: LIST_ID, user_id: USER_ID, category_id: CAT_DAIRY, name: 'חלב 3%', is_done: false, position: 0 },
+    ],
+  });
+
+  await page.goto('/');
+  // The FIRST row specifically - it's the only one that ever plays the
+  // automatic entry hint (ItemCard.tsx's playEntryHint) at all.
+  const row = page.locator('[data-testid="item-row"]').nth(0);
+  const deleteButton = page.getByRole('button', { name: 'מחיקת פריט' });
+
+  // The hint reveals to MAX_DRAG_PX (220px) - the full width of the red
+  // action panel - not swipeSettings.revealThreshold (80px default).
+  // Measured directly: with this design's delete icon CENTERED within
+  // the full panel (not pinned near its left edge like the pre-redesign
+  // layout), revealThreshold's 80px leaves the icon entirely hidden
+  // under the row - only revealing the full panel width reliably
+  // exposes it regardless of exactly where within the panel it sits.
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 220, 0\)/, { timeout: 1500 });
+
+  // Geometry check: the delete button's bounding box must sit entirely
+  // to the left of the row's now-shifted left edge - i.e. genuinely
+  // uncovered, not merely technically "in the DOM" while still hidden
+  // underneath the opaque white row.
+  const rowBox = await row.boundingBox();
+  const buttonBox = await deleteButton.boundingBox();
+  expect(rowBox).not.toBeNull();
+  expect(buttonBox).not.toBeNull();
+  expect(rowBox!.x).toBeGreaterThanOrEqual(buttonBox!.x + buttonBox!.width);
+
+  // Not just present in the DOM - genuinely opaque. revealProgress
+  // (which drives the icon's opacity/scale) is min(1, translateX /
+  // revealThreshold), which is already 1 well before 220px given the
+  // default revealThreshold of 80px.
+  const opacity = await deleteButton.evaluate((el) => Number(getComputedStyle(el).opacity));
+  expect(opacity).toBeCloseTo(1, 1);
+
+  // Settles back to the resting (closed) position once the hold
+  // elapses - still a one-time hint, not left open.
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 0, 0\)/, { timeout: 2000 });
+});
+
 const FEATURE_FLAGS_KEY = 'dev-settings:featureFlags';
 
 // Regression guard: InviteMemberModal briefly had an enableEmailInvite

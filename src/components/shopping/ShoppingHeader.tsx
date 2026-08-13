@@ -20,7 +20,7 @@ export default function ShoppingHeader({ title, subtitle, totalItems, members, o
   return (
     <div className="flex items-center justify-between gap-3 px-1">
       <div className="flex flex-col gap-0.5 min-w-0">
-        <h1 className="text-[28px] font-extrabold text-gray-900 tracking-tight truncate">{title}</h1>
+        <h1 className="text-[30px] font-bold text-gray-900 tracking-tight truncate">{title}</h1>
         <div className="flex items-center gap-1.5">
           <span className="text-[13px] font-medium text-gray-500 truncate">
             {subtitle} · {members.length} מחוברים · {totalItems} פריטים

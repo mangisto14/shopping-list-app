@@ -22,24 +22,19 @@ export default function CategorySection({ categoryName, count, expanded, onToggl
 
   return (
     <div>
-      <button
-        onClick={onToggleExpanded}
-        className={`w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 ${style.bg}`}
-      >
-        <span className="flex items-center gap-1.5 min-w-0">
-          <span className="text-[15px] flex-shrink-0" aria-hidden="true">
-            {style.icon}
-          </span>
-          <span className={`text-[13px] font-bold truncate ${style.text}`}>{categoryName ?? 'ללא קטגוריה'}</span>
+      <button onClick={onToggleExpanded} className="w-full flex items-center justify-between gap-2 px-1 py-1.5">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.strip}`} aria-hidden="true" />
+          <span className="text-[13px] font-bold truncate text-gray-500">{categoryName ?? 'ללא קטגוריה'}</span>
         </span>
         <span className="flex items-center gap-1.5 flex-shrink-0">
-          <span className={`text-[12px] font-semibold ${style.text} opacity-70`}>{count}</span>
+          <span className="text-[12px] font-semibold text-gray-400">{count}</span>
           <svg
             width="10"
             height="10"
             viewBox="0 0 10 10"
             fill="none"
-            className={`flex-shrink-0 ${style.text} transition-transform duration-150`}
+            className="flex-shrink-0 text-gray-400 transition-transform duration-150"
             style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
             aria-hidden="true"
           >
@@ -52,14 +47,18 @@ export default function CategorySection({ categoryName, count, expanded, onToggl
           measuring scrollHeight in JS. Children stay mounted while
           collapsed (0fr row + overflow-hidden hides them) rather than
           unmounting - trades a little always-in-DOM cost (fine at this
-          app's 100-item/20-category scale) for an animatable height. */}
+          app's 100-item/20-category scale) for an animatable height.
+          Grouped-inset list: one rounded white container per category,
+          rows are flush (see ItemCard) and separated only by a hairline
+          divider - this container's own rounding + overflow-hidden is
+          what clips the true first/last row's corners. */}
       <div
         className="grid transition-[grid-template-rows] ease-out"
         style={{ gridTemplateRows: expanded ? '1fr' : '0fr', transitionDuration: `${animations.listItemAnimationDuration}ms` }}
         aria-hidden={!expanded}
       >
         <div className="overflow-hidden">
-          <div className="flex flex-col gap-1 mt-1">{children}</div>
+          <div className="mt-1 bg-white rounded-2xl overflow-hidden divide-y divide-gray-100">{children}</div>
         </div>
       </div>
     </div>

@@ -42,7 +42,7 @@ export default function BottomNav() {
     <nav
       aria-label="ניווט ראשי"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
+      className="fixed bottom-0 inset-x-0 z-40 bg-white/90 backdrop-blur-xl border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]"
     >
       <div className="max-w-md sm:max-w-lg md:max-w-2xl mx-auto grid grid-cols-5 h-16">
         {TABS.slice(0, 2).map(({ to, label, Icon, ActiveIcon, end }) => (
@@ -51,8 +51,8 @@ export default function BottomNav() {
             to={to}
             end={end}
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center gap-0.5 text-[11px] transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-inset ${
-                isActive ? 'text-purple-600 font-medium' : 'text-gray-400 hover:text-gray-600 font-medium'
+              `flex flex-col items-center justify-center gap-0.5 text-[11px] transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset ${
+                isActive ? 'text-blue-600 font-medium' : 'text-gray-400 hover:text-gray-600 font-medium'
               }`
             }
           >
@@ -78,8 +78,8 @@ export default function BottomNav() {
             to={to}
             end={end}
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center gap-0.5 text-[11px] transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-inset ${
-                isActive ? 'text-purple-600 font-medium' : 'text-gray-400 hover:text-gray-600 font-medium'
+              `flex flex-col items-center justify-center gap-0.5 text-[11px] transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset ${
+                isActive ? 'text-blue-600 font-medium' : 'text-gray-400 hover:text-gray-600 font-medium'
               }`
             }
           >
