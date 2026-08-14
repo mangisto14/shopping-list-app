@@ -17,6 +17,10 @@ export interface SwipeSettings {
   autoCloseDelay: number;
   // ms - duration of the delete slide/fade/collapse choreography.
   animationDuration: number;
+  // ms - how long the one-time automatic discovery hint (ItemCard's
+  // entry-hint effect) stays fully revealed before closing. Affects
+  // only that hint, not real swipe behavior.
+  discoveryHintHoldMs: number;
 }
 
 export const DEFAULT_SWIPE_SETTINGS: SwipeSettings = {
@@ -24,6 +28,7 @@ export const DEFAULT_SWIPE_SETTINGS: SwipeSettings = {
   revealDuration: 180,
   autoCloseDelay: 0,
   animationDuration: 220,
+  discoveryHintHoldMs: 500,
 };
 
 export const swipeStore = createDevStore('dev-settings:swipe', DEFAULT_SWIPE_SETTINGS);

@@ -51,7 +51,8 @@ const SLIDE_OUT_PX = 420;
 
 // Entry hint: a one-time nudge shortly after the row mounts, teaching
 // the swipe-right-to-delete gesture without feeling like a tutorial.
-// Total: 500 delay + 220 slide + 500 hold + 220 return = 1440ms.
+// Total: 500 delay + 220 slide + swipeSettings.discoveryHintHoldMs (500
+// default) hold + 220 return.
 //
 // The reveal distance is deliberately NOT its own arbitrary constant -
 // it reuses swipeSettings.revealThreshold (clamped to MAX_DRAG_PX, same
@@ -63,8 +64,12 @@ const SLIDE_OUT_PX = 420;
 // rather than centered within the full MAX_DRAG_PX-wide panel, so a
 // reveal of just revealThreshold (80px default) - far short of the
 // full panel width - is already enough to clear it.
+//
+// The hold duration itself (how long the hint stays revealed before
+// returning to rest) is dev-tunable via swipeSettings.discoveryHintHoldMs
+// - see src/devtools/Swipe/store.ts - and affects only this one-time
+// hint, not real swipe/auto-close/animation timing.
 const ENTRY_HINT_DELAY_MS = 500;
-const ENTRY_HINT_HOLD_MS = 500;
 const ENTRY_HINT_TRANSITION_MS = 220;
 
 function prefersReducedMotion() {
@@ -152,7 +157,7 @@ export default function ItemCard({ item, count, categoryName, onToggle, onDelete
       const holdTimer = window.setTimeout(() => {
         setTranslateX(0);
         window.setTimeout(() => setHinting(false), ENTRY_HINT_TRANSITION_MS);
-      }, ENTRY_HINT_HOLD_MS);
+      }, swipeSettings.discoveryHintHoldMs);
       return () => window.clearTimeout(holdTimer);
     }, ENTRY_HINT_DELAY_MS);
 

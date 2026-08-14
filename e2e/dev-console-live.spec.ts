@@ -172,3 +172,34 @@ test('resetting a single field only affects that field', async ({ page }) => {
   await expect(page.getByLabel('Reveal Threshold value')).toHaveValue('80'); // back to default
   await expect(page.getByLabel('Reveal Duration value')).toHaveValue('900'); // untouched
 });
+
+test('Discovery Hint Hold Duration: appears in the console with a 500ms default, live-updates, persists after reload, and Reset restores it', async ({ page }) => {
+  await seedAuthSession(page);
+  await mockListData(page, { categories: [], items: [] });
+
+  await page.goto('/dev-settings');
+
+  // Requirement 2 (console displays the setting) + requirement 1
+  // (default value is 500ms) in one check.
+  const numberInput = page.getByLabel('Discovery Hint Hold Duration value');
+  const rangeInput = page.getByLabel('Discovery Hint Hold Duration slider');
+  await expect(numberInput).toHaveValue('500');
+  await expect(rangeInput).toHaveValue('500');
+
+  // Live update, same two-way-bound number/range pair as every other
+  // SliderRow (see the revealThreshold live-update test above).
+  await numberInput.fill('1200');
+  await numberInput.blur();
+  await expect(rangeInput).toHaveValue('1200');
+
+  // Requirement 3: persists using the same SwipeSettings/localStorage
+  // mechanism as the other swipe settings, verified with a real reload.
+  await page.reload();
+  await expect(page.getByLabel('Discovery Hint Hold Duration value')).toHaveValue('1200');
+
+  // Reset control: restores just this field, same pattern as the
+  // revealThreshold/revealDuration test above.
+  const holdRow = page.getByLabel('Discovery Hint Hold Duration value').locator('xpath=ancestor::div[contains(@class, "space-y-2")][1]');
+  await holdRow.getByRole('button', { name: 'Reset' }).click();
+  await expect(page.getByLabel('Discovery Hint Hold Duration value')).toHaveValue('500');
+});

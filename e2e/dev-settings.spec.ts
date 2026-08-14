@@ -146,6 +146,41 @@ test('the automatic discovery hint reveals far enough for the delete icon to be 
   await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 0, 0\)/, { timeout: 2000 });
 });
 
+test('a custom discoveryHintHoldMs keeps the automatic discovery hint revealed for that long before it returns to rest', async ({ page }) => {
+  await seedAuthSession(page);
+  // A hold well above the 500ms default, so "still revealed at a point
+  // past the default but within the custom value" actually distinguishes
+  // this setting being honored from the hardcoded default being used.
+  await page.addInitScript(
+    ({ key, value }) => localStorage.setItem(key, value),
+    { key: SWIPE_SETTINGS_KEY, value: JSON.stringify({ revealThreshold: 80, revealDuration: 180, autoCloseDelay: 0, animationDuration: 220, discoveryHintHoldMs: 1500 }) }
+  );
+  await mockListData(page, {
+    categories: [{ id: CAT_DAIRY, list_id: LIST_ID, user_id: USER_ID, name: 'מוצרי חלב' }],
+    items: [
+      { id: 'e2e-item-1', list_id: LIST_ID, user_id: USER_ID, category_id: CAT_DAIRY, name: 'חלב 3%', is_done: false, position: 0 },
+    ],
+  });
+
+  await page.goto('/');
+  const row = page.locator('[data-testid="item-row"]').nth(0);
+
+  // Revealed after the fixed 500ms entry delay (unaffected by
+  // discoveryHintHoldMs, which only controls how long it then stays
+  // revealed).
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 80, 0\)/, { timeout: 1500 });
+
+  // Still revealed well past the 500ms default hold (which would have
+  // already returned to rest by now if the hardcoded default were still
+  // in effect), proving the seeded 1500ms value is actually driving the
+  // hold - not just the reveal distance.
+  await page.waitForTimeout(700);
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 80, 0\)/);
+
+  // Settles back to rest once the full custom hold elapses.
+  await expect(row).toHaveCSS('transform', /matrix\(1, 0, 0, 1, 0, 0\)/, { timeout: 2000 });
+});
+
 const FEATURE_FLAGS_KEY = 'dev-settings:featureFlags';
 
 // Regression guard: InviteMemberModal briefly had an enableEmailInvite
