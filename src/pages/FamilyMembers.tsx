@@ -19,11 +19,20 @@ export default function FamilyMembers() {
   const { members, loading: membersLoading, isOwner, currentUserId, inviteMember, removeMember } = useMembers();
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
-  const handleRemove = async (userId: string) => {
+  const handleRemove = async (userId: string, label: string) => {
+    if (!window.confirm(`להסיר את ${label} מהרשימה?`)) return;
+    setRemoveError(null);
     setRemovingId(userId);
-    await removeMember(userId);
+    const result = await removeMember(userId);
     setRemovingId(null);
+    // On success the row is already gone (removeMember's own optimistic
+    // update) - nothing left to do here. On failure it's already back
+    // (removeMember's own rollback), so just surface why.
+    if (!result.success) {
+      setRemoveError('הסרת החבר/ה נכשלה. נסו שוב.');
+    }
   };
 
   if (listsLoading) {
@@ -58,6 +67,10 @@ export default function FamilyMembers() {
 
       <p className="text-[13px] font-bold text-gray-500 px-1">חברים · {members.length}</p>
 
+      {removeError && (
+        <p className="text-sm font-medium text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{removeError}</p>
+      )}
+
       {membersLoading ? (
         <EmptyState icon="⏳" title="טוען..." />
       ) : members.length === 0 ? (
@@ -77,6 +90,15 @@ export default function FamilyMembers() {
               month: 'short',
               day: 'numeric',
             });
+            // Either signal marks this row as the owner's own - m.role
+            // alone isn't reliable (create_default_list_for_user() used
+            // to insert the owner's own row without a role, silently
+            // defaulting to 'member' on rows created before
+            // 20260723120000's fix, never backfilled - see the matching
+            // isOwner fix in useMembers.ts). activeList.owner_id is the
+            // same authority the backend's is_list_owner() checks and
+            // can't be stale this way, so it's checked first.
+            const rowIsOwner = m.userId === activeList?.owner_id || m.role === 'owner';
             return (
               <div
                 key={m.id}
@@ -93,14 +115,16 @@ export default function FamilyMembers() {
                 <span className="flex-shrink-0 text-[11.5px] font-bold text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">
                   {m.role === 'owner' ? 'מנהל/ת' : 'חבר/ה'}
                 </span>
-                {isOwner && m.role !== 'owner' && (
+                {isOwner && !rowIsOwner && (
                   <button
-                    onClick={() => handleRemove(m.userId)}
+                    onClick={() => handleRemove(m.userId, m.email || `${m.userId.slice(0, 8)}…`)}
                     disabled={removingId === m.userId}
                     aria-label={language === 'he' ? 'הסר חבר' : 'Remove member'}
-                    className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors px-1 disabled:opacity-40"
+                    className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors p-1.5 disabled:opacity-40"
                   >
-                    🗑️
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                      <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
                   </button>
                 )}
               </div>

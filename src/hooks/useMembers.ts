@@ -128,10 +128,21 @@ export function useMembers() {
     return { success: true };
   }
 
-  async function removeMember(userId: string): Promise<boolean> {
-    if (!activeListId) return false;
+  // Optimistic, same pattern as useItems.ts's deleteItem: remove locally
+  // first so the row disappears immediately rather than waiting on a
+  // Realtime echo of the client's own write, then roll back on failure
+  // rather than leaving the UI and the database disagreeing silently.
+  async function removeMember(userId: string): Promise<{ success: boolean; errorCode?: string }> {
+    if (!activeListId) return { success: false, errorCode: 'generic' };
+    const backup = rows;
+    setRows((prev) => prev.filter((r) => r.user_id !== userId));
+
     const { error } = await supabase.from('list_members').delete().eq('list_id', activeListId).eq('user_id', userId);
-    return !error;
+    if (error) {
+      setRows(backup);
+      return { success: false, errorCode: error.message };
+    }
+    return { success: true };
   }
 
   return { members, loading, isOwner, currentUserId: user?.id, inviteMember, removeMember };
