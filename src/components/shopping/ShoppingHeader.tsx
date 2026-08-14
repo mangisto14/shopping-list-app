@@ -8,6 +8,13 @@ interface ShoppingHeaderProps {
   totalItems: number;
   members: Member[];
   onInvite: () => void;
+  // Only the list owner can actually invite (invite_member_by_email
+  // raises `not_owner` server-side for anyone else) - hiding the button
+  // for non-owners avoids offering an action that can only ever fail.
+  // Defaults true so this stays backward-compatible if another caller
+  // ever renders this header without passing it - same pattern as
+  // FamilyHeroCard's showInvite.
+  showInvite?: boolean;
 }
 
 // Matches the Claude Design's main-list header: no card chrome, large
@@ -16,7 +23,7 @@ interface ShoppingHeaderProps {
 // "לקנות · N" / "הושלמו · N" section labels above the list itself
 // (design doesn't repeat them in the header); the member list and
 // invite flow now live on the Family screen, matching the design's IA.
-export default function ShoppingHeader({ title, subtitle, totalItems, members, onInvite }: ShoppingHeaderProps) {
+export default function ShoppingHeader({ title, subtitle, totalItems, members, onInvite, showInvite = true }: ShoppingHeaderProps) {
   return (
     <div className="flex items-center justify-between gap-3 px-1">
       <div className="flex flex-col gap-0.5 min-w-0">
@@ -31,15 +38,17 @@ export default function ShoppingHeader({ title, subtitle, totalItems, members, o
 
       <div className="flex items-center gap-2.5 flex-shrink-0">
         <MemberAvatarGroup members={members} />
-        <button
-          onClick={onInvite}
-          aria-label="הזמן חבר"
-          className="w-10 h-10 rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06),0_4px_12px_rgba(15,23,42,0.05)] flex items-center justify-center text-blue-600"
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-            <path d="M9 3v12M3 9h12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-          </svg>
-        </button>
+        {showInvite && (
+          <button
+            onClick={onInvite}
+            aria-label="הזמן חבר"
+            className="w-10 h-10 rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06),0_4px_12px_rgba(15,23,42,0.05)] flex items-center justify-center text-blue-600"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <path d="M9 3v12M3 9h12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );

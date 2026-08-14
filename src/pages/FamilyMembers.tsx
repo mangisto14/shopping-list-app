@@ -111,7 +111,7 @@ export default function FamilyMembers() {
 
       <InviteLinkCard />
 
-      <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} onInvite={inviteMember} />
+      <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} onInvite={inviteMember} isOwner={isOwner} />
     </div>
   );
 }

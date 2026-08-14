@@ -106,7 +106,7 @@ export default function ShoppingList() {
 
   const { items, addItem: addItemToList, toggleItem, renameItem, deleteItem } = useItems();
   const { categories } = useCategories();
-  const { members: realMembers, currentUserId, inviteMember } = useMembers();
+  const { members: realMembers, currentUserId, isOwner, inviteMember } = useMembers();
   const { featureFlags, animations } = useDevTools();
 
   const [input, setInput] = useState('');
@@ -522,6 +522,7 @@ export default function ShoppingList() {
             totalItems={totalItems}
             members={members}
             onInvite={() => setShowInviteModal(true)}
+            showInvite={isOwner}
           />
         </div>
 
@@ -640,7 +641,7 @@ export default function ShoppingList() {
 
       <FloatingAddButton onClick={() => (showAddForm ? closeAddForm() : openAddForm())} />
 
-      <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} onInvite={inviteMember} />
+      <InviteMemberModal open={showInviteModal} onClose={() => setShowInviteModal(false)} onInvite={inviteMember} isOwner={isOwner} />
 
       <CreateListModal open={showCreateListModal} onClose={() => setShowCreateListModal(false)} />
 

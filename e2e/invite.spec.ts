@@ -1,6 +1,6 @@
 // e2e/invite.spec.ts
 import { test, expect } from '@playwright/test';
-import { mockListData, mockInviteRpc, mockCreateInviteLinkRpc, seedAuthSession, USER_ID } from './fixtures';
+import { mockListData, mockInviteRpc, mockCreateInviteLinkRpc, seedAuthSession, USER_ID, LIST_ID } from './fixtures';
 
 test.describe('Invite Member', () => {
   test('the list owner can invite a member by email', async ({ page }) => {
@@ -70,5 +70,50 @@ test.describe('Invite Member', () => {
     // asserts against the button's real, current label.
     await expect(page.getByText('הזמנת בן משפחה')).not.toBeVisible();
     await expect(page.getByRole('button', { name: 'הסר חבר' })).toHaveCount(0);
+  });
+
+  test('the list owner sees Invite by Email and the invitation-link controls on the shopping list page', async ({ page }) => {
+    await seedAuthSession(page, USER_ID, 'owner@example.com');
+    await mockListData(page, {
+      listMembers: [{ id: 'lm1', list_id: LIST_ID, user_id: USER_ID, role: 'owner', joined_at: new Date().toISOString() }],
+      profiles: [{ id: USER_ID, email: 'owner@example.com' }],
+    });
+    await mockCreateInviteLinkRpc(page);
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'הזמן חבר' }).click();
+
+    await expect(page.getByText('קישור הזמנה למשפחה')).toBeVisible();
+    await expect(page.getByText('הזמנה באימייל')).toBeVisible();
+    await expect(page.locator('input[type="email"]')).toBeVisible();
+  });
+
+  test('a non-owner member does not see the invite button, Invite by Email, or the invitation-link controls on the shopping list page', async ({ page }) => {
+    const memberId = 'e2e00003-3333-3333-3333-333333333333';
+    await seedAuthSession(page, memberId, 'member@example.com');
+    await mockListData(page, {
+      ownerId: USER_ID,
+      listMembers: [
+        { id: 'lm1', list_id: LIST_ID, user_id: USER_ID, role: 'owner', joined_at: new Date().toISOString() },
+        { id: 'lm2', list_id: LIST_ID, user_id: memberId, role: 'member', joined_at: new Date().toISOString() },
+      ],
+      profiles: [
+        { id: USER_ID, email: 'owner@example.com' },
+        { id: memberId, email: 'member@example.com' },
+      ],
+    });
+
+    await page.goto('/');
+
+    // The header's invite trigger (aria-label "הזמן חבר") must not be
+    // rendered at all for a non-owner - not just disabled - so there is
+    // no way to even open the modal that contains "Invite by Email" and
+    // the invitation-link controls.
+    await expect(page.getByRole('button', { name: 'הזמן חבר' })).toHaveCount(0);
+    await expect(page.getByText('הזמנה באימייל')).toHaveCount(0);
+    await expect(page.getByText('קישור הזמנה למשפחה')).toHaveCount(0);
+
+    // Retains normal access to the shared list itself.
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
 });
