@@ -116,4 +116,31 @@ test.describe('Invite Member', () => {
     // Retains normal access to the shared list itself.
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
+
+  // Regression test for the "owner can't see Invite by Email" bug:
+  // create_default_list_for_user() used to insert the owner's own
+  // list_members row without a role, silently defaulting to 'member'
+  // (fixed going forward in 20260723120000_fix_default_list_owner_role.sql,
+  // but never backfilled onto rows that already existed) - so a real
+  // owner's own list_members.role can still say 'member' today.
+  // useMembers().isOwner must not rely on that column alone.
+  test('the real owner still sees Invite by Email even when their own list_members row has a stale role of "member"', async ({ page }) => {
+    await seedAuthSession(page, USER_ID, 'owner@example.com');
+    await mockListData(page, {
+      ownerId: USER_ID, // lists.owner_id - the actual, authoritative owner
+      listMembers: [
+        // Deliberately wrong/stale role - lists.owner_id (above) is what
+        // makes USER_ID the real owner, not this row's role column.
+        { id: 'lm1', list_id: LIST_ID, user_id: USER_ID, role: 'member', joined_at: new Date().toISOString() },
+      ],
+      profiles: [{ id: USER_ID, email: 'owner@example.com' }],
+    });
+    await mockCreateInviteLinkRpc(page);
+
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'הזמן חבר' })).toBeVisible();
+    await page.getByRole('button', { name: 'הזמן חבר' }).click();
+    await expect(page.getByText('הזמנה באימייל')).toBeVisible();
+    await expect(page.locator('input[type="email"]')).toBeVisible();
+  });
 });

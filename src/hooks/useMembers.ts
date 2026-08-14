@@ -31,7 +31,7 @@ export interface Member {
 // Lists.tsx, and FamilyMembers.tsx.
 export function useMembers() {
   const { user } = useAuth();
-  const { activeListId } = useActiveList();
+  const { activeListId, activeList } = useActiveList();
   const [rows, setRows] = useState<ListMemberRow[]>([]);
   const [emailByUserId, setEmailByUserId] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -104,7 +104,19 @@ export function useMembers() {
     }))
     .sort((a, b) => (a.role === b.role ? a.joinedAt.localeCompare(b.joinedAt) : a.role === 'owner' ? -1 : 1));
 
-  const isOwner = rows.some((r) => r.user_id === user?.id && r.role === 'owner');
+  // lists.owner_id (already fetched by useActiveList/useLists) is the
+  // same authority the backend's is_list_owner() checks - it's not
+  // derived from list_members.role at all. That role column can lag
+  // behind it: create_default_list_for_user() used to insert the
+  // owner's own list_members row without setting role (silently
+  // defaulting to 'member' - see 20260723120000_fix_default_list_owner_role.sql),
+  // and that fix was deliberately never backfilled onto existing rows.
+  // Checking role alone can therefore say "not owner" for a genuine
+  // owner; owner_id can't, since it's exactly what actually made them
+  // the owner in the first place. Kept as an "or" (not a replacement)
+  // so a list_members row that's correctly 'owner' but briefly missing
+  // activeList (e.g. mid-fetch) still resolves correctly too.
+  const isOwner = activeList?.owner_id === user?.id || rows.some((r) => r.user_id === user?.id && r.role === 'owner');
 
   async function inviteMember(email: string): Promise<{ success: boolean; errorCode?: string }> {
     if (!activeListId) return { success: false, errorCode: 'generic' };
