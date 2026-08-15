@@ -6,6 +6,7 @@ import { useActiveList } from '../ActiveListContext';
 import { useRealtimeTable } from './useRealtimeTable';
 import { upsertById, removeById } from './realtimeUtils';
 import { useForceSyncListener } from '../devtools';
+import { findMatchingCategory } from '../utils/categoryMatching';
 
 export interface Category {
   id: string;
@@ -49,29 +50,41 @@ export function useCategories() {
     onDelete: (id) => setCategories((prev) => removeById(prev, id)),
   });
 
-  async function addCategory(name: string) {
-    if (!name.trim() || !user || !activeListId) return;
+  // Returns the created category (or the pre-existing one, if this name
+  // already matches - case/whitespace-insensitively - a category on
+  // this list), so a caller that needs to immediately select whatever
+  // this resolved to (e.g. Smart Import's "+ Create category" action)
+  // can do so without a second lookup. Returns null only when nothing
+  // was created and nothing existing matched (blank name, or not
+  // logged in/no active list).
+  async function addCategory(name: string): Promise<Category | null> {
+    const trimmed = name.trim();
+    if (!trimmed || !user || !activeListId) return null;
+
+    const existing = findMatchingCategory(categories, trimmed);
+    if (existing) return existing;
 
     const tempId = `temp-${crypto.randomUUID()}`;
     const optimisticCategory: Category = {
       id: tempId,
       list_id: activeListId,
       user_id: user.id,
-      name: name.trim(),
+      name: trimmed,
     };
     setCategories((prev) => [...prev, optimisticCategory]);
 
     const { data, error } = await supabase
       .from('categories')
-      .insert({ name: name.trim(), user_id: user.id, list_id: activeListId })
+      .insert({ name: trimmed, user_id: user.id, list_id: activeListId })
       .select()
       .single();
 
     if (error || !data) {
       setCategories((prev) => removeById(prev, tempId));
-      return;
+      return null;
     }
     setCategories((prev) => upsertById(removeById(prev, tempId), data));
+    return data;
   }
 
   async function updateCategory(id: string, newName: string) {

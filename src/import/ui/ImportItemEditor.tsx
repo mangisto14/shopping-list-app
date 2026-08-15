@@ -32,6 +32,11 @@ interface ImportItemEditorProps {
   onChange: (patch: Partial<ImportItemCandidate>) => void;
   onMergeIntoDuplicate?: () => void;
   onClose: () => void;
+  // Same addCategory the Categories page already uses (see
+  // useCategories.ts) - passed straight through, not wrapped in any
+  // new data-access layer. Returns the created (or already-existing,
+  // matched by name) category so it can be auto-selected below.
+  onCreateCategory: (name: string) => Promise<Category | null>;
 }
 
 function confidenceEmoji(confidence: ConfidenceLevel): string {
@@ -83,6 +88,7 @@ export default function ImportItemEditor({
   onChange,
   onMergeIntoDuplicate,
   onClose,
+  onCreateCategory,
 }: ImportItemEditorProps) {
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const style = getCategoryStyle(candidate.categoryName ?? undefined);
@@ -163,6 +169,14 @@ export default function ImportItemEditor({
               onSelect={(id) => {
                 const selected = categories.find((c) => c.id === id) ?? null;
                 onChange({ categoryId: selected?.id ?? null, categoryName: selected?.name ?? null });
+              }}
+              onCreateCategory={async (name) => {
+                const created = await onCreateCategory(name);
+                // Never selects on failure (created is null) - the
+                // dropdown still closes (matching the normal-selection
+                // flow), but the candidate's category is left exactly
+                // as it was rather than silently pointing at nothing.
+                if (created) onChange({ categoryId: created.id, categoryName: created.name });
               }}
               onClose={() => setCategoryDropdownOpen(false)}
             />

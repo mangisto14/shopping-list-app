@@ -27,6 +27,7 @@ interface ImportPreviewProps {
   onSelectCandidate: (id: string | null) => void;
   onUpdateCandidate: (id: string, patch: Partial<ImportItemCandidate>) => void;
   onMergeIntoDuplicate: (duplicateId: string, targetId: string) => void;
+  onCreateCategory: (name: string) => Promise<Category | null>;
 }
 
 export default function ImportPreview({
@@ -37,6 +38,7 @@ export default function ImportPreview({
   onSelectCandidate,
   onUpdateCandidate,
   onMergeIntoDuplicate,
+  onCreateCategory,
 }: ImportPreviewProps) {
   const warningByCandidateId = useMemo(() => {
     const map = new Map<string, string>();
@@ -70,6 +72,7 @@ export default function ImportPreview({
           duplicateTargetId ? () => onMergeIntoDuplicate(selectedCandidate.id, duplicateTargetId) : undefined
         }
         onClose={() => onSelectCandidate(null)}
+        onCreateCategory={onCreateCategory}
       />
     );
   }

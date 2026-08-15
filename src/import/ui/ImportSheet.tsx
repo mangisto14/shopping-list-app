@@ -35,7 +35,7 @@ interface ImportSheetProps {
 type Step = 'source' | 'analyzing' | 'preview';
 
 export default function ImportSheet({ open, onClose }: ImportSheetProps) {
-  const { categories } = useCategories();
+  const { categories, addCategory } = useCategories();
   const { items, addItem } = useItems();
   const { user } = useAuth();
   const { language } = useLanguage();
@@ -247,6 +247,7 @@ export default function ImportSheet({ open, onClose }: ImportSheetProps) {
           onSelectCandidate={setSelectedCandidateId}
           onUpdateCandidate={updateCandidate}
           onMergeIntoDuplicate={mergeIntoDuplicate}
+          onCreateCategory={addCategory}
         />
       ) : null}
     </BottomSheet>
