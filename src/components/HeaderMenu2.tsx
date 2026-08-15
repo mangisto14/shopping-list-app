@@ -54,7 +54,7 @@ export default function HeaderMenu() {
 
       <PopoverPanel
         transition
-        className="absolute  z-10 mt-5 flex w-screen max-w-max px-4 transition data-[closed]:translate-y-1 data-[closed]:opacity-0 data-[enter]:duration-200 data-[leave]:duration-150 data-[enter]:ease-out data-[leave]:ease-in"
+        className="absolute  z-40 mt-5 flex w-screen max-w-max px-4 transition data-[closed]:translate-y-1 data-[closed]:opacity-0 data-[enter]:duration-200 data-[leave]:duration-150 data-[enter]:ease-out data-[leave]:ease-in"
       >
         <div className="xl:w-screen max-w-md flex-auto overflow-hidden rounded-3xl bg-white text-sm/6 shadow-lg ring-1 ring-gray-900/5">
           <div className="px-4 py-2">

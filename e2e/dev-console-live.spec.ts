@@ -203,3 +203,72 @@ test('Discovery Hint Hold Duration: appears in the console with a 500ms default,
   await holdRow.getByRole('button', { name: 'Reset' }).click();
   await expect(page.getByLabel('Discovery Hint Hold Duration value')).toHaveValue('500');
 });
+
+test('the open nav menu stacks above Developer Console page content (z-index regression)', async ({ page }) => {
+  // Reproduces on a narrow/mobile viewport: at the default desktop
+  // width the menu panel and the console's settings rows don't share
+  // any screen space, so the stacking bug never gets a chance to show.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedAuthSession(page);
+  await mockListData(page, { categories: [], items: [] });
+
+  await page.goto('/dev-settings');
+  await page.getByRole('button', { name: 'תפריט ניווט' }).click();
+  const menuLink = page.getByRole('link', { name: 'Developer Console' });
+  await expect(menuLink).toBeVisible();
+
+  // The menu panel itself (Popover's rounded-3xl white card), not just
+  // one link inside it - this is what needs a reliable stacking level
+  // above the page content it visually covers.
+  const menuPanel = page.locator('.rounded-3xl.bg-white').first();
+  const panelBox = await menuPanel.boundingBox();
+  expect(panelBox).not.toBeNull();
+
+  // The Developer Console's own sticky search/filter bar (directly
+  // above the Swipe Settings section, visible right under the open
+  // menu at this viewport size) is the control that actually escaped
+  // above the menu: `position: sticky` plus an explicit z-index makes
+  // it establish its own stacking context, previously tied with the
+  // menu panel's z-index and winning the tie-break on later DOM order.
+  const searchBar = page.getByPlaceholder('Search settings…');
+  const searchBarBox = await searchBar.boundingBox();
+  expect(searchBarBox).not.toBeNull();
+
+  // Sanity check that this test actually exercises the overlap: if a
+  // future layout change moves these two out of each other's way, this
+  // assertion (not the elementFromPoint check below) is what fails,
+  // making that obvious instead of the test silently passing for the
+  // wrong reason.
+  const overlaps =
+    searchBarBox!.x < panelBox!.x + panelBox!.width &&
+    searchBarBox!.x + searchBarBox!.width > panelBox!.x &&
+    searchBarBox!.y < panelBox!.y + panelBox!.height &&
+    searchBarBox!.y + searchBarBox!.height > panelBox!.y;
+  expect(overlaps).toBe(true);
+
+  // At the overlap coordinate, the menu must be what actually paints on
+  // top - not the sticky search bar underneath it.
+  const x = searchBarBox!.x + searchBarBox!.width / 2;
+  const y = searchBarBox!.y + searchBarBox!.height / 2;
+  const topElementIsInsideMenu = await page.evaluate(
+    ({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      return !!el?.closest('.rounded-3xl.bg-white');
+    },
+    { x, y }
+  );
+  expect(topElementIsInsideMenu).toBe(true);
+
+  // Closing the menu leaves the Swipe Settings control exactly as it
+  // was - unchanged value, still interactive - confirming the fix only
+  // touched stacking, not the control itself.
+  await page.keyboard.press('Escape');
+  await expect(menuLink).toHaveCount(0);
+
+  const numberInput = page.getByLabel('Reveal Threshold value');
+  const rangeInput = page.getByLabel('Reveal Threshold slider');
+  await expect(numberInput).toHaveValue('80');
+  await numberInput.fill('95');
+  await numberInput.blur();
+  await expect(rangeInput).toHaveValue('95');
+});
