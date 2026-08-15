@@ -64,4 +64,46 @@ test.describe('Smart Import (Phase 2B - Knowledge Base & Semantic Analysis)', ()
     const potatoRow = page.getByRole('button', { name: /^כלול פריט זה בייבוא תפוח אדמה/ });
     await expect(potatoRow).toContainText('ירקות');
   });
+
+  test('AI Extraction & Enrichment Quality: percentages stay part of the name, trailing quantity+unit and the Hebrew gershayim unit mark are both recognized', async ({
+    page,
+  }) => {
+    await seedAuthSession(page);
+    await enableExperimentalFeatures(page);
+    await mockListData(page, {
+      listName: 'הרשימה שלי',
+      ownerId: USER_ID,
+      categories: [
+        { id: 'cat-dairy', list_id: 'e2e0000-0000-0000-0000-000000000001', user_id: USER_ID, name: 'מוצרי חלב' },
+      ],
+    });
+
+    await page.goto('/lists');
+    await page.getByRole('button', { name: 'ייבוא חכם' }).click();
+
+    await page.locator('textarea').fill(['חלב 3%', 'חלב 3% 2 ליטר', 'גבינה צהובה 400 גרם', '500 מ״ל חלב'].join('\n'));
+    await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
+    await expect(page.getByText('🤖 ניתוח AI הושלם')).toBeVisible();
+
+    // "חלב 3%" alone - the 3% fat-content is part of the product's
+    // identity, not a quantity: the name must stay "חלב 3%" exactly,
+    // and quantity must stay at its untouched default of 1 (matched
+    // right after the name, before the "·" category separator) - not
+    // "3", which is what a naive "last number in the text" rule would
+    // have wrongly produced.
+    const plainMilkRowNamePattern = new RegExp('^כלול פריט זה בייבוא חלב 3% 1 ');
+    await expect(page.getByRole('button', { name: plainMilkRowNamePattern })).toBeVisible();
+
+    // "חלב 3% 2 ליטר" - the percentage still stays part of the name;
+    // the genuine trailing quantity+unit after it IS recognized.
+    await expect(page.getByRole('button', { name: /^כלול פריט זה בייבוא חלב 3% 2 ליטר/ })).toBeVisible();
+
+    // "גבינה צהובה 400 גרם" - trailing quantity+unit, multi-word name.
+    await expect(page.getByRole('button', { name: /^כלול פריט זה בייבוא גבינה צהובה 400 גרם/ })).toBeVisible();
+
+    // "500 מ״ל חלב" - typed with the Hebrew gershayim punctuation mark
+    // (״), not the ASCII quote (") the unit is canonically stored
+    // with - must still resolve to quantity 500, unit מ"ל, name חלב.
+    await expect(page.getByRole('button', { name: /^כלול פריט זה בייבוא חלב 500 מ"ל/ })).toBeVisible();
+  });
 });

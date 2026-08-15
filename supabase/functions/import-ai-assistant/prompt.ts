@@ -54,6 +54,9 @@ export function buildSystemPrompt(language: string, categories: string[]): strin
     '',
     'For every item you have something useful to add, call the submit_import_analysis tool with your suggestions. Only include a field when you are actually contributing information beyond what was already given - do not restate values you were not asked to change.',
     'Every field you set must come with a confidence level of exactly "high", "medium", or "low" - never a number, never any other word.',
+    '',
+    'A number that describes what the product itself IS - a fat percentage ("3%"), a strength, a size grade - is part of the product\'s identity, not a quantity. Only set the quantity field for a genuine count/amount of items being bought; never move a percentage or similar identity number out of the name and into quantity.',
+    'A word that describes the product but does not belong in name, category, unit, or quantity (e.g. a size like "large"/"small", a variant, a brand) can go in notes instead of being dropped or awkwardly left fused into the name - but only when you are not already renaming/cleaning the name itself to include it.',
     'You must respond ONLY by calling the tool. Do not write any other text.',
   ].join('\n');
 }

@@ -150,3 +150,43 @@ describe('analyzeCandidates - batch filtering', () => {
     expect(results).toHaveLength(0);
   });
 });
+
+describe('analyzeCandidate - AI Extraction & Enrichment Quality phase', () => {
+  it('"גבינה צהובה 400 גרם" -> quantity 400, unit גרם, name cleaned to גבינה צהובה', () => {
+    // Trailing quantity+unit, a shape RuleBasedNormalizer's own regexes
+    // (leading-only) can't parse - the candidate this stage receives
+    // still has the raw, unstripped line as its name.
+    const c = candidate({ id: 'c1', rawText: 'גבינה צהובה 400 גרם', name: 'גבינה צהובה 400 גרם', quantity: 1, unit: null });
+    const enrichment = analyzeCandidate(c, emptyContext);
+    expect(enrichment.quantity).toMatchObject({ value: 400, confidence: 'high' });
+    expect(enrichment.unit).toMatchObject({ value: 'גרם', confidence: 'high' });
+    expect(enrichment.name).toMatchObject({ value: 'גבינה צהובה', confidence: 'high' });
+  });
+
+  it('"חלב 3%" -> the percentage is never read as a quantity; name stays "חלב 3%" unchanged', () => {
+    const c = candidate({ id: 'c1', rawText: 'חלב 3%', name: 'חלב 3%', quantity: 1, unit: null });
+    const enrichment = analyzeCandidate(c, context);
+    expect(enrichment.quantity).toBeUndefined();
+    // A rename IS expected here (חלב 3% -> the tier-3a "חלב" token
+    // match resolves category, but per renameConfidenceForTier a
+    // 'keyword' tier never renames) - so name must stay untouched too.
+    expect(enrichment.name).toBeUndefined();
+    expect(enrichment.category?.value).toMatchObject({ name: 'מוצרי חלב' });
+  });
+
+  it('"חלב 3% 2 ליטר" -> quantity 2, unit ליטר, name cleaned to "חלב 3%" (percentage preserved)', () => {
+    const c = candidate({ id: 'c1', rawText: 'חלב 3% 2 ליטר', name: 'חלב 3% 2 ליטר', quantity: 1, unit: null });
+    const enrichment = analyzeCandidate(c, context);
+    expect(enrichment.quantity).toMatchObject({ value: 2, confidence: 'high' });
+    expect(enrichment.unit).toMatchObject({ value: 'ליטר', confidence: 'high' });
+    expect(enrichment.name).toMatchObject({ value: 'חלב 3%', confidence: 'high' });
+  });
+
+  it('"500 מ״ל חלב" (gershayim unit mark) -> quantity 500, unit מ"ל, name cleaned to חלב', () => {
+    const c = candidate({ id: 'c1', rawText: '500 מ״ל חלב', name: '500 מ״ל חלב', quantity: 1, unit: null });
+    const enrichment = analyzeCandidate(c, context);
+    expect(enrichment.quantity).toMatchObject({ value: 500, confidence: 'high' });
+    expect(enrichment.unit).toMatchObject({ value: 'מ"ל', confidence: 'high' });
+    expect(enrichment.name).toMatchObject({ value: 'חלב', confidence: 'high' });
+  });
+});

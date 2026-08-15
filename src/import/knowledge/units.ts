@@ -49,10 +49,23 @@ const UNIT_SYNONYMS: Record<string, string> = {
   'ml': 'מ"ל',
 };
 
+// Hebrew abbreviations (ק"ג, מ"ל) are keyed above with a plain ASCII
+// quote, but real input commonly uses the dedicated Hebrew GERSHAYIM/
+// GERESH punctuation marks (״ ׳) or curly quotes instead - e.g. a user
+// typing "מ״ל" with the proper Hebrew punctuation mark, not the ASCII
+// quote next to it on the keyboard. Folded to ASCII purely for this
+// lookup, same normalization semantic/mergeKey.ts's own toAsciiQuotes
+// already applies for merge-identity purposes - kept here too so every
+// caller of normalizeUnit (parseQuantity's leading AND trailing forms)
+// benefits automatically, not just merge identity.
+function toAsciiQuotes(token: string): string {
+  return token.replace(/[״“”]/g, '"').replace(/[׳‘’]/g, "'");
+}
+
 // Whole-token lookup only - callers must pass one already-split token,
 // never a full phrase (see the doc comment above for why).
 export function normalizeUnit(token: string): string | null {
-  const trimmed = token.trim();
+  const trimmed = toAsciiQuotes(token.trim());
   if (!trimmed) return null;
   return UNIT_SYNONYMS[trimmed] ?? UNIT_SYNONYMS[trimmed.toLowerCase()] ?? null;
 }

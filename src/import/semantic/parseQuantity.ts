@@ -92,6 +92,28 @@ export function parseQuantity(rawText: string): ParsedQuantity {
     return { quantity, quantityFound: true, unit, unitFound, remainingText: rest.join(' ') };
   }
 
+  // Trailing quantity + unit, product name (possibly itself containing
+  // a percent/size token like "3%") first: "גבינה צהובה 400 גרם",
+  // "חלב 3% 2 ליטר". Checked before the bare-trailing-quantity case
+  // below so a genuine unit right after the number is captured rather
+  // than left fused into the "remaining name" text. The percent token
+  // itself can never be mistaken for this quantity: PURE_NUMBER_RE is
+  // anchored end-to-end, so "3%" (with its trailing %) always fails
+  // it - only a token that's ENTIRELY digits ever qualifies.
+  if (tokens.length >= 3) {
+    const maybeUnit = normalizeUnit(tokens[tokens.length - 1]);
+    const maybeQuantityToken = tokens[tokens.length - 2];
+    if (maybeUnit && PURE_NUMBER_RE.test(maybeQuantityToken)) {
+      return {
+        quantity: Number(maybeQuantityToken),
+        quantityFound: true,
+        unit: maybeUnit,
+        unitFound: true,
+        remainingText: tokens.slice(0, -2).join(' '),
+      };
+    }
+  }
+
   // Trailing bare quantity, no unit: "מלפפון 3"
   const lastToken = tokens[tokens.length - 1];
   if (tokens.length >= 2 && PURE_NUMBER_RE.test(lastToken)) {
