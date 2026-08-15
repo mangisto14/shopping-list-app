@@ -23,6 +23,11 @@ export const shoppingLabels = {
     addItemTitle: "הוספת פריט חדש",
     addToListButton: "הוסף לרשימה",
     categoryLabel: "קטגוריה",
+    copyListAction: "העתק רשימה",
+    copyActiveSectionLabel: "לקנות",
+    copyCompletedSectionLabel: "הושלם",
+    copySuccessMessage: "הרשימה הועתקה",
+    copyErrorMessage: "העתקת הרשימה נכשלה",
   },
   en: {
     title: "Add Item",
@@ -48,5 +53,10 @@ export const shoppingLabels = {
     addItemTitle: "Add New Item",
     addToListButton: "Add to list",
     categoryLabel: "Category",
+    copyListAction: "Copy List",
+    copyActiveSectionLabel: "To Buy",
+    copyCompletedSectionLabel: "Completed",
+    copySuccessMessage: "List copied",
+    copyErrorMessage: "Failed to copy list",
   },
 };

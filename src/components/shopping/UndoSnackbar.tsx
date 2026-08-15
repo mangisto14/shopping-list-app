@@ -3,7 +3,12 @@ import { useEffect, useState } from 'react';
 
 interface UndoSnackbarProps {
   label: string;
-  onUndo: () => void;
+  // Omitted entirely for a plain, actionless confirmation/error toast
+  // (e.g. Copy List's "List copied") - the undo-delete use case always
+  // passes this. Reusing this one component for both rather than
+  // introducing a second, near-identical toast/notification component.
+  onUndo?: () => void;
+  undoLabel?: string;
 }
 
 // Bottom snackbar shown for ~5s after a swipe-delete, giving the user a
@@ -11,7 +16,7 @@ interface UndoSnackbarProps {
 // Purely presentational - the undo window/timer itself lives in
 // ShoppingList.tsx; this component only renders the current pending
 // removal and forwards a tap on "בטל" (Undo).
-export default function UndoSnackbar({ label, onUndo }: UndoSnackbarProps) {
+export default function UndoSnackbar({ label, onUndo, undoLabel = 'בטל' }: UndoSnackbarProps) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -30,10 +35,12 @@ export default function UndoSnackbar({ label, onUndo }: UndoSnackbarProps) {
       }}
     >
       <div className="flex items-center justify-between gap-3 bg-gray-900 text-white rounded-2xl shadow-[0_8px_24px_rgba(15,23,42,0.25)] px-4 py-3">
-        <span className="text-[14px] font-medium truncate">🗑 {label}</span>
-        <button onClick={onUndo} className="flex-shrink-0 text-[14px] font-bold text-blue-300 hover:text-blue-200 active:scale-95 transition-transform">
-          בטל
-        </button>
+        <span className="text-[14px] font-medium truncate">{label}</span>
+        {onUndo && (
+          <button onClick={onUndo} className="flex-shrink-0 text-[14px] font-bold text-blue-300 hover:text-blue-200 active:scale-95 transition-transform">
+            {undoLabel}
+          </button>
+        )}
       </div>
     </div>
   );

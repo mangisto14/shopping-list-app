@@ -7,8 +7,10 @@ import { useLanguage } from '../LanguageContext';
 import { shoppingLabels } from '../i18n/shoppingList';
 import { useActiveList } from '../ActiveListContext';
 import { useItems, type Item } from '../hooks/useItems';
-import { useCategories, type Category } from '../hooks/useCategories';
+import { useCategories } from '../hooks/useCategories';
 import { useMembers } from '../hooks/useMembers';
+import { clusterByName, groupByCategory, type CategoryGroup } from '../utils/shoppingListGrouping';
+import { buildShoppingListText } from '../utils/buildShoppingListText';
 import type { Member } from '../components/ui/MemberAvatar';
 import ShoppingHeader from '../components/shopping/ShoppingHeader';
 import InviteMemberModal from '../components/shopping/InviteMemberModal';
@@ -32,37 +34,6 @@ import { PageSkeleton } from '../components/ui/Skeleton';
 // beyond "the Nth list in the array gets the Nth emoji".
 const EMOJI_PALETTE = ['🏠', '🛒', '🛋️', '🚗', '✈️', '🎉', '🏡', '💼'];
 
-interface CategoryGroup {
-  categoryId: string | null; // null = uncategorized
-  categoryName: string | null;
-  items: Item[];
-}
-
-interface ItemCluster {
-  key: string;
-  representative: Item;
-  ids: string[];
-}
-
-// Groups items with an identical name into one displayed row ("Nx").
-// Deliberately keyed on exact name only - different names are never
-// merged, even within the same category. Each underlying row is still
-// its own `items` record; this is a display/interaction grouping layer
-// only, not a schema change. Order is preserved (first occurrence
-// order), so a cluster doesn't jump position when its count changes.
-function clusterByName(items: Item[]): ItemCluster[] {
-  const clusters = new Map<string, ItemCluster>();
-  for (const item of items) {
-    const existing = clusters.get(item.name);
-    if (existing) {
-      existing.ids.push(item.id);
-    } else {
-      clusters.set(item.name, { key: item.name, representative: item, ids: [item.id] });
-    }
-  }
-  return [...clusters.values()];
-}
-
 const collapsedGroupsStorageKey = (listId: string) => `shopping-list:collapsedGroups:${listId}`;
 
 // Reads persisted collapse state for a list, defaulting to "everything
@@ -76,26 +47,6 @@ function readCollapsedGroups(listId: string | null): Set<string> {
   } catch {
     return new Set();
   }
-}
-
-// Groups items by category, preserving the categories list's own order,
-// with any uncategorized items collected into a trailing group. Empty
-// groups are dropped - a category with nothing in this section (e.g. no
-// completed dairy items yet) shouldn't render an empty header.
-function groupByCategory(items: Item[], categories: Category[]): CategoryGroup[] {
-  const byId = new Map<string, CategoryGroup>(
-    categories.map((c) => [c.id, { categoryId: c.id, categoryName: c.name, items: [] }])
-  );
-  const uncategorized: CategoryGroup = { categoryId: null, categoryName: null, items: [] };
-
-  for (const item of items) {
-    const group = (item.category_id && byId.get(item.category_id)) || uncategorized;
-    group.items.push(item);
-  }
-
-  const groups = [...byId.values()].filter((g) => g.items.length > 0);
-  if (uncategorized.items.length > 0) groups.push(uncategorized);
-  return groups;
 }
 
 export default function ShoppingList() {
@@ -171,6 +122,39 @@ export default function ShoppingList() {
 
   const commitRemoval = (removal: PendingRemoval) => {
     removal.ids.forEach((id) => deleteItem(id));
+  };
+
+  // Copy List: a brief, actionless confirmation/error reusing
+  // UndoSnackbar itself (no onUndo passed) rather than a separate
+  // toast component - see UndoSnackbar.tsx's own comment on why.
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const copyFeedbackTimeoutRef = useRef<number | null>(null);
+  const COPY_FEEDBACK_MS = 2000;
+
+  const showCopyFeedback = (label: string) => {
+    if (copyFeedbackTimeoutRef.current !== null) window.clearTimeout(copyFeedbackTimeoutRef.current);
+    setCopyFeedback(label);
+    copyFeedbackTimeoutRef.current = window.setTimeout(() => setCopyFeedback(null), COPY_FEEDBACK_MS);
+  };
+
+  // Plain text, not the on-screen `${emoji} ${name}` title - matches
+  // the required copied format, which shows just the list's own name.
+  const handleCopyList = async () => {
+    const text = buildShoppingListText(activeList?.name ?? t.familyTitle, items, categories, {
+      active: t.copyActiveSectionLabel,
+      completed: t.copyCompletedSectionLabel,
+      uncategorized: t.uncategorized,
+    });
+    try {
+      if (!navigator.clipboard) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(text);
+      showCopyFeedback(t.copySuccessMessage);
+    } catch {
+      // Clipboard access can fail (permissions, insecure context, an
+      // older browser with no Clipboard API at all) - never silent,
+      // always a user-visible error instead.
+      showCopyFeedback(t.copyErrorMessage);
+    }
   };
 
   const scheduleRemoval = (ids: string[], label: string) => {
@@ -508,12 +492,28 @@ export default function ShoppingList() {
           only scrolling region in the whole app is the <main> item list
           below, never this page container or the document itself. */}
       <div className="flex-shrink-0 pt-1">
-        <ListSwitcher
-          lists={displayLists}
-          activeList={activeList}
-          onSelect={(id) => setActiveListId(id)}
-          onCreateNew={() => setShowCreateListModal(true)}
-        />
+        <div className="flex items-center justify-between gap-2">
+          <ListSwitcher
+            lists={displayLists}
+            activeList={activeList}
+            onSelect={(id) => setActiveListId(id)}
+            onCreateNew={() => setShowCreateListModal(true)}
+          />
+          {/* Copy List: same small pill-button visual pattern as
+              ListSwitcher's own button, not a new menu - a single
+              action doesn't need one. */}
+          <button
+            onClick={handleCopyList}
+            aria-label={t.copyListAction}
+            title={t.copyListAction}
+            className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05),0_2px_6px_rgba(15,23,42,0.04)] text-gray-600 hover:text-gray-800 transition-all active:scale-[0.98]"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M3.5 10.5v-6a1 1 0 0 1 1-1h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
 
         <div className="mt-1">
           <ShoppingHeader
@@ -645,7 +645,8 @@ export default function ShoppingList() {
 
       <CreateListModal open={showCreateListModal} onClose={() => setShowCreateListModal(false)} />
 
-      {pendingRemoval && <UndoSnackbar label={`${pendingRemoval.label} נמחק`} onUndo={handleUndo} />}
+      {pendingRemoval && <UndoSnackbar label={`🗑 ${pendingRemoval.label} נמחק`} onUndo={handleUndo} />}
+      {!pendingRemoval && copyFeedback && <UndoSnackbar label={copyFeedback} />}
     </div>
   );
 }
