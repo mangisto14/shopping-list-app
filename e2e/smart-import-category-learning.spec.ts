@@ -96,6 +96,70 @@ test.describe('Smart Import - category learning generalizes across phrasings (me
     expect(aiAssistantCallCount).toBe(1);
   });
 
+  test('a category learned from "X large" is applied to a later plain "X" - the originally reported scenario', async ({
+    page,
+  }) => {
+    await seedAuthSession(page);
+    await enableExperimentalFeatures(page);
+    await mockListData(page, { listName: 'הרשימה שלי', ownerId: USER_ID, categories: CATEGORIES });
+
+    let aiAssistantCallCount = 0;
+    await page.route('**/functions/v1/import-ai-assistant*', async (route) => {
+      aiAssistantCallCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ providerId: 'claude', suggestions: [], warnings: [] }),
+      });
+    });
+
+    let storedRows: Record<string, unknown>[] = [];
+    await page.route('**/rest/v1/user_import_learning*', async (route) => {
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '[]');
+        storedRows = [...storedRows, ...body];
+        return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(body) });
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(storedRows) });
+    });
+
+    // --- First import: "קורנפלקס גדול" ("large cornflakes"),
+    // uncategorized until the user manually picks a category. ---
+    await page.goto('/lists');
+    await page.getByRole('button', { name: 'ייבוא חכם' }).click();
+    await page.locator('textarea').fill('קורנפלקס גדול');
+    await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
+
+    const firstRow = page.getByRole('button', { name: /^כלול פריט זה בייבוא קורנפלקס/ });
+    await expect(firstRow).toContainText('ללא קטגוריה');
+
+    await firstRow.click();
+    await page.getByRole('button', { name: /ללא קטגוריה/ }).click();
+    await page.getByRole('option', { name: 'ירקות' }).click();
+    await page.getByRole('button', { name: 'סגירה - חזרה לרשימה' }).click();
+
+    await page.getByRole('button', { name: /הוספת \d+ פריטים/ }).click();
+    await expect(page.getByRole('heading', { name: 'ייבוא חכם' })).toHaveCount(0);
+
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0].merge_key).toBe('קורנפלקס'); // "גדול" recognized as a generic size descriptor, not part of the identity
+
+    // --- Second import: the plain product name alone, with no size
+    // descriptor at all. Neither the exact typed text nor the raw
+    // string match the first correction - only the product identity
+    // (mergeKey) does, once "גדול" is stripped from both sides. ---
+    await page.getByRole('button', { name: 'ייבוא חכם' }).click();
+    await page.locator('textarea').fill('קורנפלקס');
+    await page.getByRole('button', { name: 'ניתוח פריטים' }).click();
+
+    const secondRow = page.getByRole('button', { name: /^כלול פריט זה בייבוא קורנפלקס/ });
+    await expect(secondRow).toContainText('ירקות');
+    await expect(secondRow).not.toContainText('ללא קטגוריה');
+
+    // No additional AI Assistant call for the second import.
+    expect(aiAssistantCallCount).toBe(1);
+  });
+
   test('a category learned for one product never leaks onto an unrelated product in the same import', async ({ page }) => {
     await seedAuthSession(page);
     await enableExperimentalFeatures(page);

@@ -21,6 +21,7 @@ import type { AiItemEnrichment, ConfidenceLevel, ImportItemCandidate, ImportPipe
 import { matchProduct, type ProductMatchTier } from '../knowledge/KnowledgeMatcher';
 import { resolveCategoryId } from '../shared/resolveCategoryId';
 import { parseQuantity } from './parseQuantity';
+import { isMeasurementUnit } from '../knowledge/units';
 
 // Whether - and at what confidence - a resolved canonical name should
 // replace `candidate.name`. Deliberately keyed off the match TIER, not
@@ -54,23 +55,44 @@ export function analyzeCandidate(candidate: ImportItemCandidate, context: Import
   const parsed = parseQuantity(candidate.rawText);
   const match = matchProduct(parsed.remainingText, context);
 
-  // Quantity/unit parsed directly out of the raw text are `high`
-  // confidence - this isn't a guess, it's what the user actually
-  // typed. Only emitted when it differs from what's already resolved,
-  // so a row RuleBasedNormalizer already parsed correctly doesn't get
-  // a redundant "AI touched this" badge.
-  if (parsed.quantityFound && parsed.quantity !== candidate.quantity) {
-    enrichment.quantity = { value: parsed.quantity, confidence: 'high', reason: 'Parsed directly from the text' };
-  }
+  // A number attached to a MEASUREMENT unit (ק"ג/גרם/ליטר/מ"ל)
+  // describes the SIZE of one package, not a shopping count - "חלב 2
+  // ליטר" means "one 2-liter carton", not "2 units of milk" (see
+  // knowledge/units.ts's isMeasurementUnit doc comment). The shopping
+  // quantity stays 1; the number+unit together become the package-size
+  // descriptor, reusing the existing free-text `unit` field rather
+  // than a bare canonical unit word alone - "500 גרם" carries real
+  // information "גרם" alone would silently drop. A number attached to
+  // the countable unit ("יח'") or with no unit at all is unaffected -
+  // both genuinely are a shopping count, handled by the branch below
+  // exactly as before.
+  if (parsed.unitFound && parsed.unit && isMeasurementUnit(parsed.unit)) {
+    if (candidate.quantity !== 1) {
+      enrichment.quantity = { value: 1, confidence: 'high', reason: 'Package size, not a shopping count' };
+    }
+    const packageInfo = `${parsed.quantity} ${parsed.unit}`;
+    if (packageInfo !== candidate.unit) {
+      enrichment.unit = { value: packageInfo, confidence: 'high', reason: 'Parsed directly from the text' };
+    }
+  } else {
+    // Quantity/unit parsed directly out of the raw text are `high`
+    // confidence - this isn't a guess, it's what the user actually
+    // typed. Only emitted when it differs from what's already
+    // resolved, so a row RuleBasedNormalizer already parsed correctly
+    // doesn't get a redundant "AI touched this" badge.
+    if (parsed.quantityFound && parsed.quantity !== candidate.quantity) {
+      enrichment.quantity = { value: parsed.quantity, confidence: 'high', reason: 'Parsed directly from the text' };
+    }
 
-  if (parsed.unitFound && parsed.unit && parsed.unit !== candidate.unit) {
-    enrichment.unit = { value: parsed.unit, confidence: 'high', reason: 'Parsed directly from the text' };
-  } else if (!parsed.unitFound && !candidate.unit && match.defaultUnit) {
-    // No unit in the text at all - fall back to the knowledge base's
-    // typical unit for this product, but only ever as a low-confidence
-    // (pending, never auto-applied) suggestion - it's a guess about
-    // the *product*, not derived from what the user actually typed.
-    enrichment.unit = { value: match.defaultUnit, confidence: 'low', reason: 'Typical unit for this product' };
+    if (parsed.unitFound && parsed.unit && parsed.unit !== candidate.unit) {
+      enrichment.unit = { value: parsed.unit, confidence: 'high', reason: 'Parsed directly from the text' };
+    } else if (!parsed.unitFound && !candidate.unit && match.defaultUnit) {
+      // No unit in the text at all - fall back to the knowledge base's
+      // typical unit for this product, but only ever as a low-confidence
+      // (pending, never auto-applied) suggestion - it's a guess about
+      // the *product*, not derived from what the user actually typed.
+      enrichment.unit = { value: match.defaultUnit, confidence: 'low', reason: 'Typical unit for this product' };
+    }
   }
 
   const renameConfidence = renameConfidenceForTier(match.matchTier);

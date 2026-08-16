@@ -17,6 +17,19 @@ interface ImportPreviewRowProps {
   onSelect: () => void;
 }
 
+// At quantity 1, showing the unit alongside it can read as two
+// consecutive numbers for a package-size unit ("1 500 גרם" - easily
+// misread as "quantity 1500" rather than "quantity 1, package 500
+// גרם" - see SemanticAnalyzer.ts's package-size handling). The unit
+// alone is already unambiguous at quantity 1, whether it's a package
+// size ("500 גרם") or a plain countable unit ("יח'"), so the "1" is
+// simply redundant there. A genuine multi-count ("3 יח'") is
+// unaffected - its own number is real, useful information.
+export function formatQuantityAndUnit(candidate: ImportItemCandidate): string {
+  if (candidate.unit && candidate.quantity === 1) return candidate.unit;
+  return candidate.unit ? `${candidate.quantity} ${candidate.unit}` : `${candidate.quantity}`;
+}
+
 function hasPendingSuggestion(candidate: ImportItemCandidate): boolean {
   return (
     candidate.aiPendingName !== undefined ||
@@ -62,10 +75,7 @@ export default function ImportPreviewRow({ candidate, onChange, onSelect }: Impo
       <div className="flex-1 min-w-0">
         <p className="text-[15px] font-semibold text-gray-900 truncate">{candidate.name}</p>
         <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-gray-500">
-          <span className="flex-shrink-0 font-medium">
-            {candidate.quantity}
-            {candidate.unit ? ` ${candidate.unit}` : ''}
-          </span>
+          <span className="flex-shrink-0 font-medium">{formatQuantityAndUnit(candidate)}</span>
           <span className="flex-shrink-0">·</span>
           <span className="flex items-center gap-0.5 min-w-0">
             <span className="flex-shrink-0">{style.icon}</span>

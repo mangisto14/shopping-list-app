@@ -78,6 +78,26 @@ describe('computeMergeKey', () => {
   it('returns the whole trimmed name unchanged when nothing looks like a quantity/unit/percent', () => {
     expect(computeMergeKey('שוקולד מריר')).toBe('שוקולד מריר');
   });
+
+  describe('generic size-descriptor words (e.g. "גדול") also collapse into one identity', () => {
+    it.each([
+      ['קורנפלקס גדול', 'קורנפלקס'],
+      ['חלב גדול', 'חלב'],
+      ['לחם קטן', 'לחם'],
+      ['גבינה בינונית', 'גבינה'],
+    ])('%s -> %s', (input, expected) => {
+      expect(computeMergeKey(input)).toBe(computeMergeKey(expected));
+    });
+
+    it('a genuinely different product is never conflated just because it also carries a size word', () => {
+      expect(computeMergeKey('קורנפלקס גדול')).not.toBe(computeMergeKey('חלב גדול'));
+    });
+
+    it('a loanword size descriptor ("מיני") is also recognized, case-insensitively', () => {
+      expect(computeMergeKey('עוגיות מיני')).toBe(computeMergeKey('עוגיות'));
+      expect(computeMergeKey('Croissant Mini')).toBe(computeMergeKey('Croissant'));
+    });
+  });
 });
 
 describe('chooseRicherName', () => {

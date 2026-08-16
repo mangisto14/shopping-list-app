@@ -43,6 +43,45 @@ describe('importService.runImport', () => {
     // @ts-expect-error - deliberately passing an invalid id to assert the runtime guard
     await expect(importService.runImport('not-a-real-source', context)).rejects.toThrow();
   });
+
+  describe('package-size measurements never become a huge shopping quantity', () => {
+    it.each([
+      ['קורנפלקס 500 גרם', 'קורנפלקס', '500 גרם'],
+      ['חלב 2 ליטר', 'חלב', '2 ליטר'],
+      ['שמן 750 מ״ל', 'שמן', '750 מ"ל'],
+      ['גבינה צהובה 400 גרם', 'גבינה צהובה', '400 גרם'],
+      ['500 מ״ל חלב', 'חלב', '500 מ"ל'],
+    ])('%s -> name %s, quantity 1, package info %s', async (text, expectedName, expectedUnit) => {
+      const result = await importService.runImport('paste-text', context, { kind: 'text', text });
+      expect(result.candidates).toHaveLength(1);
+      expect(result.candidates[0]).toMatchObject({ name: expectedName, quantity: 1, unit: expectedUnit });
+    });
+
+    it.each([
+      ['קורנפלקס 3', 'קורנפלקס', 3],
+      ['מלפפון 5', 'מלפפון', 5],
+      ['2 חלב', 'חלב', 2],
+    ])('%s -> a genuine shopping count is untouched: name %s, quantity %i, no package info', async (text, expectedName, expectedQuantity) => {
+      const result = await importService.runImport('paste-text', context, { kind: 'text', text });
+      expect(result.candidates[0]).toMatchObject({ name: expectedName, quantity: expectedQuantity, unit: null });
+    });
+
+    it('"חלב 3%" -> the percentage stays part of the product identity, never read as a quantity', async () => {
+      const result = await importService.runImport('paste-text', context, { kind: 'text', text: 'חלב 3%' });
+      expect(result.candidates[0]).toMatchObject({ name: 'חלב 3%', quantity: 1 });
+    });
+
+    it('does not cause repeated merging that produces a huge shopping quantity - commit() inserts exactly ONE row, not 500', async () => {
+      const result = await importService.runImport('paste-text', context, { kind: 'text', text: 'קורנפלקס 500 גרם' });
+      const addItem = vi.fn().mockResolvedValue(true);
+
+      const outcome = await importService.commit(result, addItem);
+
+      expect(addItem).toHaveBeenCalledTimes(1);
+      expect(addItem).toHaveBeenCalledWith('קורנפלקס', null, { unit: '500 גרם', notes: null });
+      expect(outcome).toEqual({ committed: 1, failed: 0 });
+    });
+  });
 });
 
 describe('importService.commit', () => {

@@ -41,11 +41,14 @@ describe('analyzeCandidate - the 5 required Phase 2B scenarios', () => {
     expect(enrichment.category?.value).toMatchObject({ name: 'ירקות' });
   });
 
-  it('\'2 ק"ג תפוחים\' -> quantity 2, unit ק"ג, category פירות', () => {
+  it('\'2 ק"ג תפוחים\' -> a package-size measurement, not a shopping count: quantity stays 1, unit becomes the composite "2 ק"ג", category פירות', () => {
+    // ק"ג is a MEASUREMENT unit (see knowledge/units.ts's
+    // isMeasurementUnit) - "2 ק"ג" describes 2 kilograms' worth, not
+    // "2 shopping units". Same domain rule as the trailing forms below.
     const c = candidate({ id: 'c1', rawText: '2 ק"ג תפוחים', name: 'תפוחים', quantity: 1, unit: null });
     const enrichment = analyzeCandidate(c, emptyContext);
-    expect(enrichment.quantity).toMatchObject({ value: 2, confidence: 'high' });
-    expect(enrichment.unit).toMatchObject({ value: 'ק"ג', confidence: 'high' });
+    expect(enrichment.quantity).toBeUndefined(); // already 1 - nothing to correct
+    expect(enrichment.unit).toMatchObject({ value: '2 ק"ג', confidence: 'high' });
     expect(enrichment.category?.value).toMatchObject({ name: 'פירות' });
   });
 
@@ -73,10 +76,22 @@ describe('analyzeCandidate - the 5 required Phase 2B scenarios', () => {
 
 describe('analyzeCandidate - never re-suggests a field that is already correct', () => {
   it('does not emit a quantity/unit enrichment when RuleBasedNormalizer already resolved the same values', () => {
-    const c = candidate({ id: 'c1', rawText: '500 גרם גבינה', name: 'גבינה', quantity: 500, unit: 'גרם' });
+    const c = candidate({ id: 'c1', rawText: '2 יח חלב', name: 'חלב', quantity: 2, unit: "יח'" });
     const enrichment = analyzeCandidate(c, emptyContext);
     expect(enrichment.quantity).toBeUndefined();
     expect(enrichment.unit).toBeUndefined();
+  });
+
+  it('a package-size measurement is corrected even when RuleBasedNormalizer already (wrongly) resolved the raw parsed number as quantity', () => {
+    // Regression guard: RuleBasedNormalizer's own leading regex has no
+    // notion of measurement vs count units, so for some inputs it may
+    // already have set quantity/unit to the same wrong values this
+    // stage would otherwise produce - that must never suppress the
+    // correction. See knowledge/units.ts's isMeasurementUnit.
+    const c = candidate({ id: 'c1', rawText: '500 גרם גבינה', name: 'גבינה', quantity: 500, unit: 'גרם' });
+    const enrichment = analyzeCandidate(c, emptyContext);
+    expect(enrichment.quantity).toMatchObject({ value: 1, confidence: 'high' });
+    expect(enrichment.unit).toMatchObject({ value: '500 גרם', confidence: 'high' });
   });
 
   it('does not emit a category enrichment when the candidate already has one', () => {
@@ -152,14 +167,16 @@ describe('analyzeCandidates - batch filtering', () => {
 });
 
 describe('analyzeCandidate - AI Extraction & Enrichment Quality phase', () => {
-  it('"גבינה צהובה 400 גרם" -> quantity 400, unit גרם, name cleaned to גבינה צהובה', () => {
+  it('"גבינה צהובה 400 גרם" -> a package size (quantity stays 1, unit "400 גרם"), name cleaned to גבינה צהובה', () => {
     // Trailing quantity+unit, a shape RuleBasedNormalizer's own regexes
     // (leading-only) can't parse - the candidate this stage receives
-    // still has the raw, unstripped line as its name.
+    // still has the raw, unstripped line as its name. גרם is a
+    // MEASUREMENT unit (see knowledge/units.ts's isMeasurementUnit) -
+    // "400 גרם" describes the package, not a shopping count of 400.
     const c = candidate({ id: 'c1', rawText: 'גבינה צהובה 400 גרם', name: 'גבינה צהובה 400 גרם', quantity: 1, unit: null });
     const enrichment = analyzeCandidate(c, emptyContext);
-    expect(enrichment.quantity).toMatchObject({ value: 400, confidence: 'high' });
-    expect(enrichment.unit).toMatchObject({ value: 'גרם', confidence: 'high' });
+    expect(enrichment.quantity).toBeUndefined(); // already 1 - nothing to correct
+    expect(enrichment.unit).toMatchObject({ value: '400 גרם', confidence: 'high' });
     expect(enrichment.name).toMatchObject({ value: 'גבינה צהובה', confidence: 'high' });
   });
 
@@ -174,19 +191,19 @@ describe('analyzeCandidate - AI Extraction & Enrichment Quality phase', () => {
     expect(enrichment.category?.value).toMatchObject({ name: 'מוצרי חלב' });
   });
 
-  it('"חלב 3% 2 ליטר" -> quantity 2, unit ליטר, name cleaned to "חלב 3%" (percentage preserved)', () => {
+  it('"חלב 3% 2 ליטר" -> a package size (quantity stays 1, unit "2 ליטר"), name cleaned to "חלב 3%" (percentage preserved)', () => {
     const c = candidate({ id: 'c1', rawText: 'חלב 3% 2 ליטר', name: 'חלב 3% 2 ליטר', quantity: 1, unit: null });
     const enrichment = analyzeCandidate(c, context);
-    expect(enrichment.quantity).toMatchObject({ value: 2, confidence: 'high' });
-    expect(enrichment.unit).toMatchObject({ value: 'ליטר', confidence: 'high' });
+    expect(enrichment.quantity).toBeUndefined(); // already 1 - nothing to correct
+    expect(enrichment.unit).toMatchObject({ value: '2 ליטר', confidence: 'high' });
     expect(enrichment.name).toMatchObject({ value: 'חלב 3%', confidence: 'high' });
   });
 
-  it('"500 מ״ל חלב" (gershayim unit mark) -> quantity 500, unit מ"ל, name cleaned to חלב', () => {
+  it('"500 מ״ל חלב" (gershayim unit mark) -> a package size (quantity stays 1, unit "500 מ"ל"), name cleaned to חלב', () => {
     const c = candidate({ id: 'c1', rawText: '500 מ״ל חלב', name: '500 מ״ל חלב', quantity: 1, unit: null });
     const enrichment = analyzeCandidate(c, context);
-    expect(enrichment.quantity).toMatchObject({ value: 500, confidence: 'high' });
-    expect(enrichment.unit).toMatchObject({ value: 'מ"ל', confidence: 'high' });
+    expect(enrichment.quantity).toBeUndefined(); // already 1 - nothing to correct
+    expect(enrichment.unit).toMatchObject({ value: '500 מ"ל', confidence: 'high' });
     expect(enrichment.name).toMatchObject({ value: 'חלב', confidence: 'high' });
   });
 });

@@ -21,6 +21,28 @@ function toAsciiQuotes(token: string): string {
   return token.replace(/[״“”]/g, '"').replace(/[׳‘’]/g, "'");
 }
 
+// A small, generic Hebrew SIZE-DESCRIPTOR vocabulary - not product-
+// specific (it applies identically to "חלב גדול", "לחם גדול", "קורנפלקס
+// גדול", or any other product), the same kind of hand-curated,
+// product-agnostic word list already established for units (see
+// knowledge/units.ts's UNIT_SYNONYMS). Unlike a number/percent/
+// multiplier/unit, these are plain words with no distinctive SHAPE, so
+// there's no way to recognize them structurally the way isSizeToken's
+// other checks do - a short, explicit list is the only option. Affects
+// merge identity ONLY (per this file's own doc comment on why it's
+// "more aggressive" than parseQuantity.ts): the parsed quantity and
+// the displayed/stored name are untouched - "קורנפלקס גדול" still
+// parses and displays exactly as before, but now shares one merge
+// identity with a plain "קורנפלקס" for grouping and category-learning
+// purposes.
+const SIZE_DESCRIPTOR_WORDS = new Set([
+  'גדול', 'גדולה',
+  'קטן', 'קטנה',
+  'בינוני', 'בינונית',
+  'ענק', 'ענקית',
+  'מיני', "ג'מבו", 'jumbo', 'mini',
+]);
+
 const NUMBER_RE = /^\d+(?:[.,]\d+)?$/;
 const PERCENT_RE = /^\d+(?:[.,]\d+)?%$/;
 const MULTIPLIER_RE = /^(?:[x×]\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?[x×])$/i;
@@ -38,6 +60,7 @@ function isSizeToken(rawToken: string): boolean {
   const token = toAsciiQuotes(rawToken);
   if (NUMBER_RE.test(token) || PERCENT_RE.test(token) || MULTIPLIER_RE.test(token)) return true;
   if (normalizeUnit(token)) return true;
+  if (SIZE_DESCRIPTOR_WORDS.has(token.toLowerCase())) return true;
 
   const fused = token.match(FUSED_NUMBER_SUFFIX_RE);
   if (fused) {

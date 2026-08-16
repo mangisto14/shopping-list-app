@@ -79,6 +79,25 @@ describe('importService.runImport - category learning via mergeKey (generalizes 
     expect(result.candidates[0].mergeKey).toBe('קישוא');
   });
 
+  it('a category learned from "X גדול" is applied to a later plain "X" - a generic size descriptor, not a numeric token, still collapses to one identity', async () => {
+    const enrichSpy = vi.fn();
+    mockAiAssistantProvider(enrichSpy);
+    // "קורנפלקס גדול" and "קורנפלקס" share one mergeKey once "גדול" is
+    // recognized as a generic size descriptor (see mergeKey.ts's
+    // SIZE_DESCRIPTOR_WORDS) - this is the exact scenario originally
+    // reported as broken.
+    const { lookupCategoriesByMergeKey } = mockLearningRepository({
+      categoryByMergeKey: new Map([['קורנפלקס', 'cat-veg']]),
+    });
+
+    const { importService } = await import('../ImportService');
+    const result = await importService.runImport('paste-text', context, { kind: 'text', text: 'קורנפלקס' });
+
+    expect(lookupCategoriesByMergeKey).toHaveBeenCalledWith('user-1', ['קורנפלקס']);
+    expect(enrichSpy).not.toHaveBeenCalled();
+    expect(result.candidates[0].categoryId).toBe('cat-veg');
+  });
+
   it('an exact-text learning hit always takes priority - the mergeKey fallback is never even queried', async () => {
     const enrichSpy = vi.fn();
     mockAiAssistantProvider(enrichSpy);

@@ -69,3 +69,20 @@ export function normalizeUnit(token: string): string | null {
   if (!trimmed) return null;
   return UNIT_SYNONYMS[trimmed] ?? UNIT_SYNONYMS[trimmed.toLowerCase()] ?? null;
 }
+
+// A unit is either a discrete, COUNTABLE purchase unit ("יח'" - a
+// plain "piece", the only one in the vocabulary above), or a
+// MEASUREMENT describing a single package's weight/volume (ק"ג/גרם/
+// ליטר/מ"ל). The distinction matters once a number is attached to it:
+// "חלב 2 ליטר" means "buy one 2-liter carton", not "buy 2 shopping
+// units of milk" - the number describes the SIZE of what's being
+// bought, not how many to buy. A bare number with no unit at all
+// ("מלפפון 3") or a number attached to the countable unit ("3 יח'
+// חלב") both genuinely mean "3 of these." Generic by construction -
+// this has no idea what "milk" or "cornflakes" is, it only classifies
+// the UNIT itself, so it applies identically to every product.
+const MEASUREMENT_UNITS = new Set(['ק"ג', 'גרם', 'ליטר', 'מ"ל']);
+
+export function isMeasurementUnit(canonicalUnit: string): boolean {
+  return MEASUREMENT_UNITS.has(canonicalUnit);
+}
