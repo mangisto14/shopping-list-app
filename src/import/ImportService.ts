@@ -29,7 +29,7 @@ import { analyzeCandidates } from './semantic/SemanticAnalyzer';
 import { chooseRicherName, computeMergeKey } from './semantic/mergeKey';
 import { detectBatchIssues } from './local/BatchHeuristics';
 import { learningRepository } from './learning/LearningRepository';
-import { correctionsToEnrichments } from './learning/buildEnrichments';
+import { correctionsToEnrichments, categoryCorrectionsToEnrichments } from './learning/buildEnrichments';
 import { buildPendingLearningSave } from './learning/buildCorrections';
 import { isUnresolved } from './ai-assistant/isUnresolved';
 import { suggestionsToEnrichments } from './ai-assistant/buildEnrichments';
@@ -214,6 +214,31 @@ export const importService: ImportServiceType = {
       });
       learnedCandidates = learning.candidates;
       learnedCandidateIds = new Set(learning.enrichments.map((e) => e.candidateId));
+
+      // Category learning generalization: a past category correction
+      // applies to any later import of the SAME product identity
+      // (mergeKey - see LearningRepository.lookupCategoriesByMergeKey),
+      // not just an exact repeat of the original text like the
+      // exact-text lookup above. Only a fallback for whatever the
+      // exact-text lookup left without a category - never overrides a
+      // category some earlier, more specific signal already resolved.
+      // Treated exactly like an exact-text hit for AI-skip purposes
+      // (STEP2's own "skip AI for this item" rule), so it's unioned
+      // into the same learnedCandidateIds set.
+      const stillUncategorized = learnedCandidates.filter((c) => !c.categoryId && c.mergeKey);
+      if (stillUncategorized.length > 0) {
+        const categoryLearning = await safelyEnrich(learnedCandidates, 'category learning lookup', async () => {
+          const categoryIdByMergeKey = await learningRepository.lookupCategoriesByMergeKey(
+            userId,
+            stillUncategorized.map((c) => c.mergeKey as string)
+          );
+          return categoryIdByMergeKey.size > 0
+            ? categoryCorrectionsToEnrichments(learnedCandidates, categoryIdByMergeKey, context)
+            : [];
+        });
+        learnedCandidates = categoryLearning.candidates;
+        for (const enrichment of categoryLearning.enrichments) learnedCandidateIds.add(enrichment.candidateId);
+      }
     }
 
     // AI Assistant (Phase 2C, STEP3): only candidates still unresolved

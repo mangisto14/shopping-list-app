@@ -59,6 +59,16 @@ describe('buildManualCorrection', () => {
     const edited = { ...original, unit: null };
     expect(buildManualCorrection(original, edited)).toEqual({});
   });
+
+  it('a category-only correction (name/quantity/unit left untouched) still persists', () => {
+    const original = candidate({ name: 'קורנפלקס', categoryId: null, unit: "יח'", quantity: 2 });
+    const edited = { ...original, categoryId: 'cat-breakfast' };
+
+    expect(buildManualCorrection(original, edited)).toEqual({
+      categoryId: 'cat-breakfast',
+      mergeKey: 'קורנפלקס',
+    });
+  });
 });
 
 describe('buildApprovedCorrection', () => {

@@ -22,6 +22,12 @@ interface LearningRow {
   merge_key: string | null;
 }
 
+interface CategoryByMergeKeyRow {
+  merge_key: string | null;
+  category_id: string | null;
+  updated_at?: string;
+}
+
 // Higher number wins. A save may overwrite an existing row only when
 // its own priority is >= the existing row's - so 'approved_ai' (1) can
 // never clobber an existing 'manual' (2) row, but a same-tier save
@@ -57,6 +63,21 @@ function cacheKey(userId: string, normalizedText: string): string {
 function rememberInCache(userId: string, normalizedText: string, correction: LearningCorrection | null) {
   if (cache.size >= MAX_CACHE_SIZE) cache.clear();
   cache.set(cacheKey(userId, normalizedText), correction);
+}
+
+// Separate cache for the mergeKey-based category fallback below - a
+// plain (mergeKey -> categoryId) map, not a full LearningCorrection, so
+// it's kept in its own namespace rather than overloading `cache`'s
+// per-(user, exact-text) keying with a second, incompatible meaning.
+const mergeKeyCategoryCache = new Map<string, string | null>();
+
+function mergeKeyCacheKey(userId: string, mergeKey: string): string {
+  return `${userId}:${mergeKey}`;
+}
+
+function rememberCategoryInCache(userId: string, mergeKey: string, categoryId: string | null) {
+  if (mergeKeyCategoryCache.size >= MAX_CACHE_SIZE) mergeKeyCategoryCache.clear();
+  mergeKeyCategoryCache.set(mergeKeyCacheKey(userId, mergeKey), categoryId);
 }
 
 export const learningRepository = {
@@ -100,6 +121,72 @@ export const learningRepository = {
       }
       for (const text of toQuery) {
         if (!foundTexts.has(text)) rememberInCache(userId, text, null);
+      }
+    }
+
+    return result;
+  },
+
+  // Generalizes a learned CATEGORY across differently-phrased imports
+  // of the same product, via the generic merge identity (mergeKey -
+  // see semantic/mergeKey.ts) rather than an exact repeat of the
+  // original text - "קורנפלקס גדול" once corrected to a category
+  // should still apply to a later, differently-phrased "קורנפלקס",
+  // since both share the same product identity. Deliberately
+  // CATEGORY-ONLY, unlike lookupMany above: a learned quantity/unit/
+  // name is tied to the literal phrasing it was corrected from and
+  // must never generalize this way, but a product's category doesn't
+  // depend on how much of it you're buying or how you phrased it.
+  //
+  // ImportService only calls this for candidates lookupMany's
+  // exact-text match left without a category - a more specific past
+  // correction always takes priority over this more general one.
+  async lookupCategoriesByMergeKey(userId: string, mergeKeys: string[]): Promise<Map<string, string>> {
+    const uniqueKeys = Array.from(new Set(mergeKeys.filter(Boolean)));
+    const result = new Map<string, string>();
+    const toQuery: string[] = [];
+
+    for (const key of uniqueKeys) {
+      const cached = mergeKeyCategoryCache.get(mergeKeyCacheKey(userId, key));
+      if (cached !== undefined) {
+        if (cached) result.set(key, cached);
+      } else {
+        toQuery.push(key);
+      }
+    }
+
+    if (toQuery.length > 0) {
+      const { data, error } = await supabase
+        .from('user_import_learning')
+        .select('merge_key, category_id, updated_at')
+        .eq('user_id', userId)
+        .in('merge_key', toQuery);
+
+      if (error) {
+        console.error('Smart Import: category learning lookup by merge key failed, continuing without it', error);
+        return result;
+      }
+
+      // Sorted newest-first client-side (same chain shape as
+      // lookupMany above - no server-side ORDER BY to keep the query
+      // simple) so the first row seen per key, below, is the most
+      // recent correction - "the newest correction wins", same rule
+      // saveCorrections' own priority check already applies to the
+      // exact-text path.
+      const rows = [...((data ?? []) as CategoryByMergeKeyRow[])].sort((a, b) =>
+        (b.updated_at ?? '').localeCompare(a.updated_at ?? '')
+      );
+
+      const foundKeys = new Set<string>();
+      for (const row of rows) {
+        if (!row.merge_key || !row.category_id) continue;
+        if (foundKeys.has(row.merge_key)) continue;
+        result.set(row.merge_key, row.category_id);
+        rememberCategoryInCache(userId, row.merge_key, row.category_id);
+        foundKeys.add(row.merge_key);
+      }
+      for (const key of toQuery) {
+        if (!foundKeys.has(key)) rememberCategoryInCache(userId, key, null);
       }
     }
 
@@ -187,6 +274,14 @@ export const learningRepository = {
 
     for (const { normalizedText, correction } of toUpsert) {
       rememberInCache(userId, normalizedText, correction);
+      // Primes the mergeKey fallback cache too, same "an immediate
+      // lookup does not re-query" guarantee lookupMany already gets -
+      // only when this save actually carries a positive category (an
+      // explicit "no category" correction isn't generalized this way,
+      // same scoping as lookupCategoriesByMergeKey's query itself).
+      if (correction.mergeKey && correction.categoryId) {
+        rememberCategoryInCache(userId, correction.mergeKey, correction.categoryId);
+      }
     }
   },
 };

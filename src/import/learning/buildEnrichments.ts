@@ -64,3 +64,49 @@ export function correctionsToEnrichments(
 
   return enrichments;
 }
+
+const MERGE_KEY_REASON = 'From a past correction on a similar item';
+
+// The mergeKey-based category fallback (see
+// LearningRepository.lookupCategoriesByMergeKey) - converts a batch of
+// (mergeKey -> categoryId) hits into enrichments the same way
+// correctionsToEnrichments does for an exact-text hit above, but
+// deliberately narrower in two ways:
+//   - category only (name/unit/quantity are tied to the literal
+//     phrasing they were corrected from and never generalize this
+//     way);
+//   - only ever FILLS A GAP - a candidate that already has a category
+//     (from Semantic Analysis, an exact-text learning hit, or anything
+//     else upstream) is left untouched, since a fuzzy identity match
+//     is deliberately lower-priority than any more specific signal.
+export function categoryCorrectionsToEnrichments(
+  candidates: ImportItemCandidate[],
+  categoryIdByMergeKey: Map<string, string>,
+  context: ImportPipelineContext
+): AiItemEnrichment[] {
+  const enrichments: AiItemEnrichment[] = [];
+
+  for (const candidate of candidates) {
+    if (candidate.categoryId) continue;
+    if (!candidate.mergeKey) continue;
+
+    const categoryId = categoryIdByMergeKey.get(candidate.mergeKey);
+    if (!categoryId) continue;
+
+    // Same stale-category safety as the exact-text path above: a
+    // category the user picked before may no longer exist (deleted
+    // since) - nothing honest to suggest, so it's simply skipped
+    // rather than applying a dangling id. The candidate stays
+    // uncategorized and falls back to the normal AI Assistant path,
+    // exactly as if no learning hit had ever existed for it.
+    const category = context.existingCategories.find((c) => c.id === categoryId);
+    if (!category) continue;
+
+    enrichments.push({
+      candidateId: candidate.id,
+      category: { value: { id: category.id, name: category.name }, confidence: 'high', reason: MERGE_KEY_REASON },
+    });
+  }
+
+  return enrichments;
+}

@@ -128,6 +128,102 @@ describe('learningRepository.lookupMany', () => {
   });
 });
 
+describe('learningRepository.lookupCategoriesByMergeKey', () => {
+  it('queries by merge_key and returns a mergeKey -> categoryId map', async () => {
+    inMock.mockResolvedValue({
+      data: [{ merge_key: 'קורנפלקס', category_id: 'cat-breakfast', updated_at: '2026-08-01T00:00:00Z' }],
+      error: null,
+    });
+
+    const repo = await importRepository();
+    const result = await repo.lookupCategoriesByMergeKey('user-1', ['קורנפלקס']);
+
+    expect(fromMock).toHaveBeenCalledWith('user_import_learning');
+    expect(eqMock).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(inMock).toHaveBeenCalledWith('merge_key', ['קורנפלקס']);
+    expect(result.get('קורנפלקס')).toBe('cat-breakfast');
+  });
+
+  it('deduplicates repeated merge keys into a single query entry', async () => {
+    const repo = await importRepository();
+    await repo.lookupCategoriesByMergeKey('user-1', ['קורנפלקס', 'קורנפלקס']);
+    expect(inMock).toHaveBeenCalledWith('merge_key', ['קורנפלקס']);
+  });
+
+  it('excludes a row with no category_id from the result', async () => {
+    inMock.mockResolvedValue({
+      data: [{ merge_key: 'חלב', category_id: null, updated_at: '2026-08-01T00:00:00Z' }],
+      error: null,
+    });
+    const repo = await importRepository();
+    const result = await repo.lookupCategoriesByMergeKey('user-1', ['חלב']);
+    expect(result.has('חלב')).toBe(false);
+  });
+
+  it('when two rows share a merge key, the most recently updated one wins', async () => {
+    inMock.mockResolvedValue({
+      data: [
+        { merge_key: 'קורנפלקס', category_id: 'cat-old', updated_at: '2026-08-01T00:00:00Z' },
+        { merge_key: 'קורנפלקס', category_id: 'cat-new', updated_at: '2026-08-10T00:00:00Z' },
+      ],
+      error: null,
+    });
+    const repo = await importRepository();
+    const result = await repo.lookupCategoriesByMergeKey('user-1', ['קורנפלקס']);
+    expect(result.get('קורנפלקס')).toBe('cat-new');
+  });
+
+  it('caches both hits and misses - a second lookup makes no new query', async () => {
+    inMock.mockResolvedValue({
+      data: [{ merge_key: 'קורנפלקס', category_id: 'cat-breakfast', updated_at: '2026-08-01T00:00:00Z' }],
+      error: null,
+    });
+    const repo = await importRepository();
+
+    await repo.lookupCategoriesByMergeKey('user-1', ['קורנפלקס', 'חלב']); // 'חלב' is a miss
+    expect(inMock).toHaveBeenCalledTimes(1);
+
+    const second = await repo.lookupCategoriesByMergeKey('user-1', ['קורנפלקס', 'חלב']);
+    expect(inMock).toHaveBeenCalledTimes(1); // still 1 - both served from cache
+    expect(second.get('קורנפלקס')).toBe('cat-breakfast');
+    expect(second.has('חלב')).toBe(false);
+  });
+
+  it('never throws on a query error - returns an empty map', async () => {
+    inMock.mockResolvedValue({ data: null, error: { message: 'network down' } });
+    const repo = await importRepository();
+    const result = await repo.lookupCategoriesByMergeKey('user-1', ['קורנפלקס']);
+    expect(result.size).toBe(0);
+  });
+
+  it('a mergeKey saved via saveCorrections is immediately available without a query', async () => {
+    const repo = await importRepository();
+
+    await repo.saveCorrections('user-1', [
+      { originalText: 'קורנפלקס גדול', correction: { categoryId: 'cat-breakfast', mergeKey: 'קורנפלקס' }, source: 'manual' },
+    ]);
+    inMock.mockClear();
+
+    const result = await repo.lookupCategoriesByMergeKey('user-1', ['קורנפלקס']);
+    expect(inMock).not.toHaveBeenCalled();
+    expect(result.get('קורנפלקס')).toBe('cat-breakfast');
+  });
+
+  it('a saved correction with no category is not cached for the merge-key fallback', async () => {
+    const repo = await importRepository();
+
+    await repo.saveCorrections('user-1', [
+      { originalText: 'קורנפלקס גדול', correction: { unit: 'יח\'', mergeKey: 'קורנפלקס' }, source: 'manual' },
+    ]);
+    inMock.mockClear();
+    inMock.mockResolvedValue({ data: [], error: null });
+
+    const result = await repo.lookupCategoriesByMergeKey('user-1', ['קורנפלקס']);
+    expect(inMock).toHaveBeenCalledTimes(1); // not served from cache - had to query
+    expect(result.has('קורנפלקס')).toBe(false);
+  });
+});
+
 describe('learningRepository.saveCorrections', () => {
   it('upserts only the provided fields plus source, normalizing the text key', async () => {
     const repo = await importRepository();
